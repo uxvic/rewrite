@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import Speech
+import AppKit
 
 /// Live voice-to-text using Apple's Speech framework. Transcribed text is
 /// published as it comes in so the UI can stream it into the input box.
@@ -50,6 +51,7 @@ final class SpeechManager: ObservableObject {
 
         errorMessage = nil
         transcript = ""
+        playChime("Tink")
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
@@ -85,6 +87,7 @@ final class SpeechManager: ObservableObject {
     }
 
     func stop() {
+        let wasRecording = isRecording
         audioEngine.inputNode.removeTap(onBus: 0)
         if audioEngine.isRunning { audioEngine.stop() }
         request?.endAudio()
@@ -92,5 +95,11 @@ final class SpeechManager: ObservableObject {
         request = nil
         task = nil
         isRecording = false
+        if wasRecording { playChime("Pop") }
+    }
+
+    private func playChime(_ name: String) {
+        guard AppSettings.shared.recordingSounds else { return }
+        NSSound(named: name)?.play()
     }
 }

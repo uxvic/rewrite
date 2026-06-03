@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 380, height: 540)
+        popover.contentSize = NSSize(width: 380, height: 640)
         popover.behavior = .transient
         popover.contentViewController = NSHostingController(rootView: PopoverView())
 
@@ -145,7 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             do {
-                let result = try await provider.stream(text: selection,
+                let result = try await provider.stream(text: RewriteAction.wrap(selection),
                                                        systemPrompt: action.systemPrompt,
                                                        onDelta: { _ in })
                 TextReplacementService.paste(result)

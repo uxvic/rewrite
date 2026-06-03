@@ -122,6 +122,10 @@ final class AppSettings: ObservableObject {
         didSet { LoginItem.set(launchAtLogin) }
     }
 
+    @Published var recordingSounds: Bool {
+        didSet { defaults.set(recordingSounds, forKey: "recordingSounds") }
+    }
+
     @Published var history: [HistoryItem] {
         didSet { persist(history, key: "history") }
     }
@@ -152,6 +156,7 @@ final class AppSettings: ObservableObject {
         defaultInPlaceAction = defaults.string(forKey: "defaultInPlaceAction")
             .flatMap(RewriteAction.init(rawValue:)) ?? .paraphrase
         launchAtLogin = LoginItem.isEnabled
+        recordingSounds = defaults.object(forKey: "recordingSounds") == nil ? true : defaults.bool(forKey: "recordingSounds")
         history = Self.read([HistoryItem].self, key: "history") ?? []
         customPresets = Self.read([CustomPreset].self, key: "customPresets") ?? []
     }

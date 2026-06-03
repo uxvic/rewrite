@@ -14,6 +14,8 @@ struct PopoverView: View {
     @State private var copied = false
     @State private var dictationBase = ""
     @State private var currentTask: Task<Void, Never>?
+    @State private var justFinished = false
+    @State private var pulse = false
 
     private enum Panel { case main, settings, history }
     @State private var panel: Panel = .main
@@ -38,7 +40,7 @@ struct PopoverView: View {
                 }
             }
         }
-        .frame(width: 380, height: 540)
+        .frame(width: 380, height: 640)
         .background(Theme.bg)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { inputFocused = true }
@@ -47,6 +49,14 @@ struct PopoverView: View {
             guard speech.isRecording else { return }
             let separator = dictationBase.isEmpty ? "" : " "
             inputText = dictationBase + separator + newValue
+        }
+        .onChange(of: speech.isRecording) { _, recording in
+            if recording {
+                pulse = false
+                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true }
+            } else {
+                withAnimation(.default) { pulse = false }
+            }
         }
     }
 
@@ -98,12 +108,12 @@ struct PopoverView: View {
     // MARK: - Main panel
 
     private var mainContent: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 12) {
             inputModule
+            outputModule
+            HairlineDivider()
             actionsModule
             customRow
-            HairlineDivider()
-            outputModule
         }
         .padding(16)
     }
@@ -117,7 +127,14 @@ struct PopoverView: View {
             HStack {
                 SectionLabel(text: "INPUT")
                 Spacer()
-                Text("\(wordCount) WORDS").font(.mono(10)).tracking(1.5).foregroundStyle(Theme.textSecondary)
+                if speech.isRecording {
+                    HStack(spacing: 5) {
+                        Circle().fill(Theme.ledFail).frame(width: 7, height: 7).opacity(pulse ? 0.25 : 1)
+                        Text("REC").font(.mono(10)).tracking(2).foregroundStyle(Theme.ledFail)
+                    }
+                } else {
+                    Text("\(wordCount) WORDS").font(.mono(10)).tracking(1.5).foregroundStyle(Theme.textSecondary)
+                }
             }
             ZStack(alignment: .bottomTrailing) {
                 ZStack(alignment: .topLeading) {
@@ -127,28 +144,40 @@ struct PopoverView: View {
                         .scrollContentBackground(.hidden)
                         .focused($inputFocused)
                         .padding(8)
-                        .frame(height: 96)
+                        .frame(height: 78)
                     if inputText.isEmpty {
                         Text("Type, paste or dictate…")
                             .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                             .padding(12).allowsHitTesting(false)
                     }
                 }
-                Button {
-                    if !speech.isRecording { dictationBase = inputText }
-                    speech.toggle()
-                } label: {
-                    Image(systemName: speech.isRecording ? "stop.fill" : "mic.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(speech.isRecording ? Color.white : Theme.accentInk)
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(speech.isRecording ? Theme.ledFail : Theme.accent))
-                }
-                .buttonStyle(.plain)
-                .padding(8)
-                .help(speech.isRecording ? "Stop dictation" : "Dictate")
+                micButton.padding(8)
             }
-            .module(Theme.surface, focused: inputFocused)
+            .module(Theme.surface, focused: inputFocused || speech.isRecording)
+        }
+    }
+
+    private var micButton: some View {
+        ZStack {
+            if speech.isRecording {
+                Circle().stroke(Theme.ledFail.opacity(0.6), lineWidth: 2)
+                    .frame(width: 30, height: 30)
+                    .scaleEffect(pulse ? 1.7 : 1.0)
+                    .opacity(pulse ? 0 : 0.8)
+            }
+            Button {
+                if !speech.isRecording { dictationBase = inputText }
+                speech.toggle()
+            } label: {
+                Image(systemName: speech.isRecording ? "stop.fill" : "mic.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(speech.isRecording ? Color.white : Theme.accentInk)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(speech.isRecording ? Theme.ledFail : Theme.accent))
+                    .scaleEffect(speech.isRecording && pulse ? 1.1 : 1.0)
+            }
+            .buttonStyle(.plain)
+            .help(speech.isRecording ? "Stop dictation" : "Dictate")
         }
     }
 
@@ -222,9 +251,9 @@ struct PopoverView: View {
                         .buttonStyle(InstrumentButtonStyle())
                         .controlSize(.mini)
                 } else {
-                    Text(errorMessage == nil ? "READY" : "ERROR")
+                    Text(errorMessage != nil ? "ERROR" : (justFinished ? "DONE" : "READY"))
                         .font(.mono(10)).tracking(1.5)
-                        .foregroundStyle(errorMessage == nil ? Theme.accent : Theme.ledFail)
+                        .foregroundStyle(errorMessage != nil ? Theme.ledFail : Theme.accent)
                 }
             }
             ScrollView {
@@ -236,8 +265,8 @@ struct PopoverView: View {
                     .textSelection(.enabled)
                     .padding(12)
             }
-            .frame(maxHeight: .infinity)
-            .module(Theme.surface)
+            .frame(height: 132)
+            .module(Theme.surface, focused: justFinished)
 
             HStack(spacing: 8) {
                 Button { copyToClipboard() } label: {
@@ -323,13 +352,17 @@ struct PopoverView: View {
 
         currentTask = Task {
             do {
-                let result = try await provider.stream(text: text, systemPrompt: systemPrompt) { piece in
+                let result = try await provider.stream(text: RewriteAction.wrap(text), systemPrompt: systemPrompt) { piece in
                     Task { @MainActor in outputText += piece }
                 }
                 await MainActor.run {
                     outputText = result
                     isLoading = false
                     settings.addHistory(actionLabel: label, input: text, output: result)
+                    withAnimation(.easeOut(duration: 0.25)) { justFinished = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                        withAnimation(.easeIn(duration: 0.5)) { justFinished = false }
+                    }
                 }
             } catch {
                 await MainActor.run {

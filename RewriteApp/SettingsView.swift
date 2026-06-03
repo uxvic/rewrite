@@ -58,6 +58,8 @@ struct SettingsView: View {
             SectionLabel(text: "GENERAL")
             Toggle("Launch at login", isOn: $settings.launchAtLogin)
                 .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+            Toggle("Sound when recording starts/stops", isOn: $settings.recordingSounds)
+                .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
             hotkeyRow("OPEN POPOVER", selection: $settings.popoverHotKeyID)
             hotkeyRow("REWRITE SELECTION", selection: $settings.inPlaceHotKeyID)
             HStack {
