@@ -1,0 +1,6 @@
+# Copy to .dev.vars for local `wrangler dev`. NEVER commit .dev.vars.
+# In production, set these with: wrangler secret put NAME
+GEMINI_API_KEY=your-google-ai-studio-key
+RESEND_API_KEY=your-resend-key
+KIT_API_KEY=your-kit-v4-api-key
+TOKEN_SECRET=any-long-random-string

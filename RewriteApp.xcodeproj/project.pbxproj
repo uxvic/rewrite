@@ -1,0 +1,326 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		3A0000000000000000000001 /* RewriteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000001 /* RewriteApp.swift */; };
+		3A0000000000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000002 /* AppDelegate.swift */; };
+		3A0000000000000000000003 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000003 /* HotKeyManager.swift */; };
+		3A0000000000000000000004 /* PopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000004 /* PopoverView.swift */; };
+		3A0000000000000000000005 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000005 /* SettingsView.swift */; };
+		3A0000000000000000000006 /* RewriteAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000006 /* RewriteAction.swift */; };
+		3A0000000000000000000007 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000007 /* AppSettings.swift */; };
+		3A0000000000000000000008 /* RewriteProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000008 /* RewriteProvider.swift */; };
+		3A0000000000000000000009 /* AnthropicProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000009 /* AnthropicProvider.swift */; };
+		3A000000000000000000000A /* OllamaProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A000000000000000000000A /* OllamaProvider.swift */; };
+		3A000000000000000000000B /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A000000000000000000000B /* KeychainStore.swift */; };
+		3A000000000000000000000C /* SpeechManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A000000000000000000000C /* SpeechManager.swift */; };
+		3A000000000000000000000D /* ClaudeCodeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A000000000000000000000D /* ClaudeCodeProvider.swift */; };
+		3A000000000000000000000E /* TextReplacementService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A000000000000000000000E /* TextReplacementService.swift */; };
+		3A000000000000000000000F /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A000000000000000000000F /* DesignSystem.swift */; };
+		3A0000000000000000000010 /* GatewayConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000010 /* GatewayConfig.swift */; };
+		3A0000000000000000000011 /* HostedProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000011 /* HostedProvider.swift */; };
+		3A0000000000000000000012 /* Updater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000012 /* Updater.swift */; };
+		3A0000000000000000000013 /* AppleOnDeviceProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000013 /* AppleOnDeviceProvider.swift */; };
+		3A0000000000000000000014 /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000014 /* Permissions.swift */; };
+		3A0000000000000000000015 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000015 /* WelcomeView.swift */; };
+		3A0000000000000000000016 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000016 /* AppIcon.icns */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		1A0000000000000000000006 /* Rewrite.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rewrite.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A0000000000000000000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		2A0000000000000000000001 /* RewriteApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteApp.swift; sourceTree = "<group>"; };
+		2A0000000000000000000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		2A0000000000000000000003 /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
+		2A0000000000000000000004 /* PopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverView.swift; sourceTree = "<group>"; };
+		2A0000000000000000000005 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		2A0000000000000000000006 /* RewriteAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteAction.swift; sourceTree = "<group>"; };
+		2A0000000000000000000007 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		2A0000000000000000000008 /* RewriteProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteProvider.swift; sourceTree = "<group>"; };
+		2A0000000000000000000009 /* AnthropicProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicProvider.swift; sourceTree = "<group>"; };
+		2A000000000000000000000A /* OllamaProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaProvider.swift; sourceTree = "<group>"; };
+		2A000000000000000000000B /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		2A000000000000000000000C /* SpeechManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechManager.swift; sourceTree = "<group>"; };
+		2A000000000000000000000D /* ClaudeCodeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeProvider.swift; sourceTree = "<group>"; };
+		2A000000000000000000000E /* TextReplacementService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextReplacementService.swift; sourceTree = "<group>"; };
+		2A000000000000000000000F /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
+		2A0000000000000000000010 /* GatewayConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayConfig.swift; sourceTree = "<group>"; };
+		2A0000000000000000000011 /* HostedProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostedProvider.swift; sourceTree = "<group>"; };
+		2A0000000000000000000012 /* Updater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Updater.swift; sourceTree = "<group>"; };
+		2A0000000000000000000013 /* AppleOnDeviceProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleOnDeviceProvider.swift; sourceTree = "<group>"; };
+		2A0000000000000000000014 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
+		2A0000000000000000000015 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		2A0000000000000000000016 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1A0000000000000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1A0000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				1A0000000000000000000004 /* RewriteApp */,
+				1A0000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		1A0000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1A0000000000000000000006 /* Rewrite.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1A0000000000000000000004 /* RewriteApp */ = {
+			isa = PBXGroup;
+			children = (
+				2A0000000000000000000001 /* RewriteApp.swift */,
+				2A0000000000000000000002 /* AppDelegate.swift */,
+				2A0000000000000000000003 /* HotKeyManager.swift */,
+				2A0000000000000000000004 /* PopoverView.swift */,
+				2A0000000000000000000005 /* SettingsView.swift */,
+				2A0000000000000000000006 /* RewriteAction.swift */,
+				2A0000000000000000000007 /* AppSettings.swift */,
+				2A0000000000000000000008 /* RewriteProvider.swift */,
+				2A0000000000000000000009 /* AnthropicProvider.swift */,
+				2A000000000000000000000A /* OllamaProvider.swift */,
+				2A000000000000000000000B /* KeychainStore.swift */,
+				2A000000000000000000000C /* SpeechManager.swift */,
+				2A000000000000000000000D /* ClaudeCodeProvider.swift */,
+				2A000000000000000000000E /* TextReplacementService.swift */,
+				2A000000000000000000000F /* DesignSystem.swift */,
+				2A0000000000000000000010 /* GatewayConfig.swift */,
+				2A0000000000000000000011 /* HostedProvider.swift */,
+				2A0000000000000000000012 /* Updater.swift */,
+				2A0000000000000000000013 /* AppleOnDeviceProvider.swift */,
+				2A0000000000000000000014 /* Permissions.swift */,
+				2A0000000000000000000015 /* WelcomeView.swift */,
+				2A0000000000000000000016 /* AppIcon.icns */,
+				1A0000000000000000000010 /* Info.plist */,
+			);
+			path = RewriteApp;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1A0000000000000000000005 /* Rewrite */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A000000000000000000000B /* Build configuration list for PBXNativeTarget "Rewrite" */;
+			buildPhases = (
+				1A0000000000000000000007 /* Sources */,
+				1A0000000000000000000008 /* Frameworks */,
+				1A0000000000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Rewrite;
+			productName = Rewrite;
+			productReference = 1A0000000000000000000006 /* Rewrite.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1A0000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					1A0000000000000000000005 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = 1A000000000000000000000A /* Build configuration list for PBXProject "RewriteApp" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 1A0000000000000000000002;
+			productRefGroup = 1A0000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1A0000000000000000000005 /* Rewrite */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1A0000000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3A0000000000000000000016 /* AppIcon.icns in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1A0000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3A0000000000000000000001 /* RewriteApp.swift in Sources */,
+				3A0000000000000000000002 /* AppDelegate.swift in Sources */,
+				3A0000000000000000000003 /* HotKeyManager.swift in Sources */,
+				3A0000000000000000000004 /* PopoverView.swift in Sources */,
+				3A0000000000000000000005 /* SettingsView.swift in Sources */,
+				3A0000000000000000000006 /* RewriteAction.swift in Sources */,
+				3A0000000000000000000007 /* AppSettings.swift in Sources */,
+				3A0000000000000000000008 /* RewriteProvider.swift in Sources */,
+				3A0000000000000000000009 /* AnthropicProvider.swift in Sources */,
+				3A000000000000000000000A /* OllamaProvider.swift in Sources */,
+				3A000000000000000000000B /* KeychainStore.swift in Sources */,
+				3A000000000000000000000C /* SpeechManager.swift in Sources */,
+				3A000000000000000000000D /* ClaudeCodeProvider.swift in Sources */,
+				3A000000000000000000000E /* TextReplacementService.swift in Sources */,
+				3A000000000000000000000F /* DesignSystem.swift in Sources */,
+				3A0000000000000000000010 /* GatewayConfig.swift in Sources */,
+				3A0000000000000000000011 /* HostedProvider.swift in Sources */,
+				3A0000000000000000000012 /* Updater.swift in Sources */,
+				3A0000000000000000000013 /* AppleOnDeviceProvider.swift in Sources */,
+				3A0000000000000000000014 /* Permissions.swift in Sources */,
+				3A0000000000000000000015 /* WelcomeView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1A000000000000000000000C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		1A000000000000000000000D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_OPTIMIZATION_LEVEL = s;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		1A000000000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RewriteApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rewriteapp.Rewrite;
+				PRODUCT_NAME = Rewrite;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				CODE_SIGN_ENTITLEMENTS = RewriteApp/Rewrite.entitlements;
+			};
+			name = Debug;
+		};
+		1A000000000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RewriteApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.rewriteapp.Rewrite;
+				PRODUCT_NAME = Rewrite;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				CODE_SIGN_ENTITLEMENTS = RewriteApp/Rewrite.entitlements;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1A000000000000000000000A /* Build configuration list for PBXProject "RewriteApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A000000000000000000000C /* Debug */,
+				1A000000000000000000000D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1A000000000000000000000B /* Build configuration list for PBXNativeTarget "Rewrite" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A000000000000000000000E /* Debug */,
+				1A000000000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 1A0000000000000000000001 /* Project object */;
+}
