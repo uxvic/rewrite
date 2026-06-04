@@ -51,6 +51,10 @@ fi
 # Sparkle update archive (.zip) + signed appcast.
 SPK="$OUT/sparkle"; rm -rf "$SPK"; mkdir -p "$SPK"
 ditto -c -k --keepParent "$APP" "$SPK/Rewrite-$VERSION.zip"
+# Optional "what's new" notes (generate_appcast embeds <ver>.html as the description).
+if [ -n "$NOTES" ]; then
+  printf '<h2>Rewrite %s</h2>\n<p>%s</p>\n' "$VERSION" "$NOTES" > "$SPK/Rewrite-$VERSION.html"
+fi
 echo "▸ Generating + EdDSA-signing appcast"
 "$BIN/generate_appcast" "$SPK" \
   --download-url-prefix "https://github.com/$GH_USER/$GH_REPO/releases/download/v$VERSION/"

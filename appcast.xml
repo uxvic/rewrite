@@ -3,12 +3,15 @@
     <channel>
         <title>Rewrite</title>
         <item>
-            <title>1.1.0</title>
-            <pubDate>Thu, 04 Jun 2026 11:30:45 +0300</pubDate>
-            <sparkle:version>1.1.0</sparkle:version>
-            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <title>1.1.1</title>
+            <pubDate>Thu, 04 Jun 2026 11:32:49 +0300</pubDate>
+            <sparkle:version>1.1.1</sparkle:version>
+            <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/uxvic/rewrite/releases/download/v1.1.0/Rewrite-1.1.0.zip" length="2126362" type="application/octet-stream" sparkle:edSignature="xhsJpRrT27GqoM9GZ9/TPQAVsDpjM9nhuaWp2116cUmrlKMxJf/RZ2CveJV6u7+KWK/fDDuHt4Vj0vuF8dBdDQ=="/>
+            <description><![CDATA[<h2>Rewrite 1.1.1</h2>
+<p>This update installed itself automatically — no reinstall needed. (Auto-update is now live.)</p>
+]]></description>
+            <enclosure url="https://github.com/uxvic/rewrite/releases/download/v1.1.1/Rewrite-1.1.1.zip" length="2126369" type="application/octet-stream" sparkle:edSignature="OC8toaqdWARK9Vsclx0JbTs1wVhidlh5RQlEZzBETUJTGugzHPH687K5N3I+WxCcsn8CdZ7SJ961EHQwG8FUCQ=="/>
         </item>
     </channel>
 </rss>
