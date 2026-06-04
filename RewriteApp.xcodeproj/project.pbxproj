@@ -29,6 +29,8 @@
 		3A0000000000000000000014 /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000014 /* Permissions.swift */; };
 		3A0000000000000000000015 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000015 /* WelcomeView.swift */; };
 		3A0000000000000000000016 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000016 /* AppIcon.icns */; };
+		3A0000000000000000000020 /* Sparkle.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000020 /* Sparkle.framework */; };
+		3C0000000000000000000020 /* Sparkle.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000020 /* Sparkle.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -56,6 +58,7 @@
 		2A0000000000000000000014 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
 		2A0000000000000000000015 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		2A0000000000000000000016 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		2A0000000000000000000020 /* Sparkle.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Sparkle.framework; path = Frameworks/Sparkle.framework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -63,16 +66,32 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3A0000000000000000000020 /* Sparkle.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		1A0000000000000000000020 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				3C0000000000000000000020 /* Sparkle.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXGroup section */
 		1A0000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
 				1A0000000000000000000004 /* RewriteApp */,
+				2A0000000000000000000020 /* Sparkle.framework */,
 				1A0000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -125,6 +144,7 @@
 				1A0000000000000000000007 /* Sources */,
 				1A0000000000000000000008 /* Frameworks */,
 				1A0000000000000000000009 /* Resources */,
+				1A0000000000000000000020 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -273,6 +293,10 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				CODE_SIGN_ENTITLEMENTS = RewriteApp/Rewrite.entitlements;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Frameworks",
+				);
 			};
 			name = Debug;
 		};
@@ -296,6 +320,10 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				CODE_SIGN_ENTITLEMENTS = RewriteApp/Rewrite.entitlements;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Frameworks",
+				);
 			};
 			name = Release;
 		};

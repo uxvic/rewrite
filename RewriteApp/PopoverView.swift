@@ -2,9 +2,7 @@ import SwiftUI
 
 struct PopoverView: View {
     @ObservedObject private var settings = AppSettings.shared
-    @ObservedObject private var updater = UpdateChecker.shared
     @StateObject private var speech = SpeechManager()
-    @State private var updateDismissed = false
 
     @State private var inputText = ""
     @State private var outputText = ""
@@ -28,10 +26,6 @@ struct PopoverView: View {
         VStack(spacing: 0) {
             specBar
             HairlineDivider()
-            if let up = updater.available, !updateDismissed {
-                updateBanner(up)
-                HairlineDivider()
-            }
             Group {
                 switch panel {
                 case .main:     mainContent
@@ -77,22 +71,6 @@ struct PopoverView: View {
             }.buttonStyle(.borderless).help("Settings")
         }
         .padding(.horizontal, 16).padding(.vertical, 13)
-    }
-
-    private func updateBanner(_ up: UpdateInfo) -> some View {
-        HStack(spacing: 8) {
-            LEDDot(color: Theme.accent)
-            Text("UPDATE AVAILABLE · v\(up.version)")
-                .font(.mono(10)).tracking(1).foregroundStyle(Theme.textPrimary).lineLimit(1)
-            Spacer()
-            Button { updater.openDownload() } label: { Text("DOWNLOAD") }
-                .buttonStyle(InstrumentButtonStyle(prominent: true)).controlSize(.small)
-            Button { updateDismissed = true } label: {
-                Image(systemName: "xmark").font(.system(size: 10)).foregroundStyle(Theme.textSecondary)
-            }.buttonStyle(.borderless)
-        }
-        .padding(.horizontal, 16).padding(.vertical, 10)
-        .background(Theme.surface)
     }
 
     private var providerShortName: String {

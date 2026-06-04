@@ -95,10 +95,6 @@ final class AppSettings: ObservableObject {
     }
     var isSignedInToHosted: Bool { !hostedToken.isEmpty }
 
-    @Published var updateFeedURL: String {
-        didSet { defaults.set(updateFeedURL, forKey: "updateFeedURL") }
-    }
-
     // Hotkeys
     @Published var popoverHotKeyID: String {
         didSet {
@@ -150,7 +146,6 @@ final class AppSettings: ObservableObject {
         hostedToken = KeychainStore.loadHostedToken() ?? ""
         hostedEmail = defaults.string(forKey: "hostedEmail") ?? ""
         gatewayBaseURL = defaults.string(forKey: "gatewayBaseURL") ?? GatewayConfig.defaultBaseURL
-        updateFeedURL = defaults.string(forKey: "updateFeedURL") ?? UpdateConfig.defaultFeedURL
         popoverHotKeyID = defaults.string(forKey: "popoverHotKeyID") ?? "optSpace"
         inPlaceHotKeyID = defaults.string(forKey: "inPlaceHotKeyID") ?? "optShiftSpace"
         defaultInPlaceAction = defaults.string(forKey: "defaultInPlaceAction")

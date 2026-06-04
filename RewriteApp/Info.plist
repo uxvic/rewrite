@@ -17,9 +17,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.1</string>
+	<string>1.1.0</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.1</string>
+	<string>1.1.0</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>
@@ -32,5 +32,13 @@
 	<string>Rewrite uses the microphone for voice-to-text dictation into the input box.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Rewrite transcribes your speech to text locally so you can dictate instead of typing.</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/uxvic/rewrite/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>HZuanhvU4JlZJO/o0dp2eq0F40lVp6um4H+oeinuqM8=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>

@@ -25,7 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(registerHotKeys),
                                                name: .hotKeysChanged, object: nil)
 
-        UpdateChecker.shared.check()
+        _ = AppUpdater.shared   // starts Sparkle + scheduled checks
 
         if !UserDefaults.standard.bool(forKey: "didOnboard") {
             UserDefaults.standard.set(true, forKey: "didOnboard")
@@ -90,10 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func checkForUpdates() {
-        Task { @MainActor in
-            UpdateChecker.shared.check()
-            if UpdateChecker.shared.available != nil { UpdateChecker.shared.openDownload() }
-        }
+        AppUpdater.shared.checkForUpdates()
     }
 
     @objc private func showAbout() {

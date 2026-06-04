@@ -106,31 +106,17 @@ struct SettingsView: View {
         }
     }
 
-    @ObservedObject private var updater = UpdateChecker.shared
-
     private var updatesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel(text: "UPDATES")
             HStack {
-                Text("VERSION \(updater.currentVersion)")
+                Text("VERSION \(AppUpdater.shared.currentVersion)")
                     .font(.mono(10)).tracking(1).foregroundStyle(Theme.textSecondary)
                 Spacer()
-                Button { updater.check() } label: { Text(updater.checking ? "CHECKING…" : "CHECK FOR UPDATES") }
+                Button { AppUpdater.shared.checkForUpdates() } label: { Text("CHECK FOR UPDATES") }
                     .buttonStyle(InstrumentButtonStyle()).controlSize(.small)
-                    .disabled(updater.checking)
             }
-            if let up = updater.available {
-                HStack(spacing: 6) {
-                    LEDDot(color: Theme.accent)
-                    Text("v\(up.version) AVAILABLE").font(.mono(10)).tracking(1).foregroundStyle(Theme.accent)
-                    Spacer()
-                    Button { updater.openDownload() } label: { Text("DOWNLOAD") }
-                        .buttonStyle(InstrumentButtonStyle(prominent: true)).controlSize(.small)
-                }
-                if let notes = up.notes, !notes.isEmpty { desc(notes) }
-            } else if updater.lastChecked != nil {
-                desc("You're on the latest version.")
-            }
+            desc("Rewrite updates itself automatically — you'll get a prompt when a new version is ready.")
         }
     }
 

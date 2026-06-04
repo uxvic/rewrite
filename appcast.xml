@@ -1,0 +1,14 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Rewrite</title>
+        <item>
+            <title>1.1.0</title>
+            <pubDate>Thu, 04 Jun 2026 11:30:45 +0300</pubDate>
+            <sparkle:version>1.1.0</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/uxvic/rewrite/releases/download/v1.1.0/Rewrite-1.1.0.zip" length="2126362" type="application/octet-stream" sparkle:edSignature="xhsJpRrT27GqoM9GZ9/TPQAVsDpjM9nhuaWp2116cUmrlKMxJf/RZ2CveJV6u7+KWK/fDDuHt4Vj0vuF8dBdDQ=="/>
+        </item>
+    </channel>
+</rss>
