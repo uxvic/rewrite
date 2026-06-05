@@ -14,18 +14,26 @@ struct PopoverView: View {
     @State private var currentTask: Task<Void, Never>?
     @State private var justFinished = false
     @State private var pulse = false
+    @State private var lastSystemPrompt: String?
+    @State private var lastLabel = ""
+    @State private var showDiff = false
+    @State private var fromClipboard = false
+    @State private var lastClipboardCount = -1
+    @State private var diffInput = ""
 
     private enum Panel { case main, settings, history }
     @State private var panel: Panel = .main
 
     @FocusState private var inputFocused: Bool
 
-    private let actions = RewriteAction.allCases
-
     var body: some View {
         VStack(spacing: 0) {
             specBar
             HairlineDivider()
+            if panel == .main {
+                modeSwitcher
+                HairlineDivider()
+            }
             Group {
                 switch panel {
                 case .main:     mainContent
@@ -34,11 +42,13 @@ struct PopoverView: View {
                 }
             }
         }
-        .frame(width: 380, height: 640)
+        .frame(width: 380, height: 668)
         .background(Theme.bg)
         .onAppear {
+            autoFillFromClipboard()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { inputFocused = true }
         }
+        .onChange(of: settings.mode) { _, _ in showDiff = false }
         .onChange(of: speech.transcript) { _, newValue in
             guard speech.isRecording else { return }
             let separator = dictationBase.isEmpty ? "" : " "
@@ -59,7 +69,7 @@ struct PopoverView: View {
     private var specBar: some View {
         HStack(spacing: 8) {
             Text("REWRITE").font(.display(16)).tracking(2).foregroundStyle(Theme.textPrimary)
-            Text("v1").font(.mono(9)).tracking(2).foregroundStyle(Theme.textSecondary)
+            Text("v\(appVersion)").font(.mono(9)).tracking(1).foregroundStyle(Theme.textSecondary)
             Spacer()
             LEDDot(color: Theme.accent)
             Text(providerShortName.uppercased()).font(.mono(10)).tracking(2).foregroundStyle(Theme.textSecondary)
@@ -81,6 +91,32 @@ struct PopoverView: View {
         case .claudeCode:    return "Claude Code"
         case .ollama:        return "Ollama"
         }
+    }
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+
+    // MARK: - Mode switcher
+
+    private var modeSwitcher: some View {
+        HStack(spacing: 0) {
+            ForEach(RewriteMode.allCases) { m in
+                let active = settings.mode == m
+                Button { settings.mode = m } label: {
+                    Text(m.title)
+                        .font(.monoLabel(11)).tracking(2)
+                        .foregroundStyle(active ? Theme.accentInk : Theme.textSecondary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 8)
+                        .background(active ? Theme.accent : Color.clear)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .background(Theme.surface)
+        .overlay(RoundedRectangle(cornerRadius: Metric.radius).stroke(Theme.hairline, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: Metric.radius))
+        .padding(.horizontal, 16).padding(.vertical, 10)
     }
 
     // MARK: - Main panel
@@ -110,6 +146,16 @@ struct PopoverView: View {
                         Circle().fill(Theme.ledFail).frame(width: 7, height: 7).opacity(pulse ? 0.25 : 1)
                         Text("REC").font(.mono(10)).tracking(2).foregroundStyle(Theme.ledFail)
                     }
+                } else if fromClipboard {
+                    Button { fromClipboard = false; inputText = "" } label: {
+                        HStack(spacing: 4) {
+                            Text("FROM CLIPBOARD").font(.mono(9)).tracking(1)
+                            Image(systemName: "xmark").font(.system(size: 8))
+                        }
+                        .foregroundStyle(Theme.textSecondary)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .overlay(Capsule().stroke(Theme.hairline, lineWidth: 1))
+                    }.buttonStyle(.plain).help("Clear")
                 } else {
                     Text("\(wordCount) WORDS").font(.mono(10)).tracking(1.5).foregroundStyle(Theme.textSecondary)
                 }
@@ -124,7 +170,7 @@ struct PopoverView: View {
                         .padding(8)
                         .frame(height: 78)
                     if inputText.isEmpty {
-                        Text("Type, paste or dictate…")
+                        Text(settings.mode.inputPlaceholder)
                             .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                             .padding(12).allowsHitTesting(false)
                     }
@@ -164,8 +210,9 @@ struct PopoverView: View {
             SectionLabel(text: "ACTIONS")
             let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
             LazyVGrid(columns: columns, spacing: 6) {
-                ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
+                ForEach(Array(settings.mode.actions.enumerated()), id: \.element.id) { index, action in
                     actionCell(index: String(format: "%02d", index + 1),
+                               icon: action.systemImage,
                                label: action.label.uppercased(),
                                key: index < 9 ? "⌘\(index + 1)" : nil) {
                         run(systemPrompt: action.systemPrompt, label: action.label)
@@ -173,7 +220,7 @@ struct PopoverView: View {
                     .keyboardShortcut(shortcutKey(index), modifiers: .command)
                 }
                 ForEach(settings.customPresets) { preset in
-                    actionCell(index: "•", label: preset.label.uppercased(), key: nil) {
+                    actionCell(index: "★", icon: "star", label: preset.label.uppercased(), key: nil) {
                         run(systemPrompt: RewriteAction.customSystemPrompt(preset.instruction), label: preset.label)
                     }
                 }
@@ -181,12 +228,13 @@ struct PopoverView: View {
         }
     }
 
-    private func actionCell(index: String, label: String, key: String?, action: @escaping () -> Void) -> some View {
+    private func actionCell(index: String, icon: String, label: String, key: String?, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 Text(index).font(.monoLabel(10)).foregroundStyle(Theme.accent)
-                Text(label).font(.mono(11)).foregroundStyle(Theme.textPrimary).lineLimit(1)
-                Spacer(minLength: 4)
+                Image(systemName: icon).font(.system(size: 11)).foregroundStyle(Theme.textSecondary).frame(width: 14)
+                Text(label).font(.mono(11)).foregroundStyle(Theme.textPrimary).lineLimit(1).minimumScaleFactor(0.85)
+                Spacer(minLength: 2)
                 if let key { Keycap(text: key) }
             }
             .padding(.vertical, 8).padding(.horizontal, 10)
@@ -205,7 +253,7 @@ struct PopoverView: View {
 
     private var customRow: some View {
         HStack(spacing: 8) {
-            TextField("Custom instruction…", text: $customInstruction)
+            TextField(settings.mode.customHint, text: $customInstruction)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textPrimary)
@@ -235,15 +283,23 @@ struct PopoverView: View {
                 }
             }
             ScrollView {
-                Text(errorMessage ?? (outputText.isEmpty ? "Result appears here." : outputText))
-                    .font(.system(size: 13))
-                    .foregroundStyle(errorMessage != nil ? Theme.ledFail :
-                                        (outputText.isEmpty ? Theme.textSecondary : Theme.textPrimary))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-                    .padding(12)
+                Group {
+                    if let errorMessage {
+                        Text(errorMessage).foregroundStyle(Theme.ledFail)
+                    } else if outputText.isEmpty {
+                        Text("Result appears here.").foregroundStyle(Theme.textSecondary)
+                    } else if showDiff {
+                        diffText
+                    } else {
+                        Text(outputText).foregroundStyle(Theme.textPrimary)
+                    }
+                }
+                .font(.system(size: 13))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+                .padding(12)
             }
-            .frame(height: 132)
+            .frame(height: 124)
             .module(Theme.surface, focused: justFinished)
 
             HStack(spacing: 8) {
@@ -257,15 +313,48 @@ struct PopoverView: View {
                 .disabled(outputText.isEmpty)
                 .keyboardShortcut(.return, modifiers: .command)
 
-                Button { inputText = outputText; outputText = "" } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: "arrow.up").font(.system(size: 12))
-                        Text("USE AS INPUT")
-                    }
+                Button { inputText = outputText; outputText = ""; showDiff = false } label: {
+                    Image(systemName: "arrow.up").font(.system(size: 12))
                 }
                 .buttonStyle(InstrumentButtonStyle())
                 .disabled(outputText.isEmpty)
+                .help("Use as input")
+
+                Button { regenerate() } label: {
+                    Image(systemName: "arrow.clockwise").font(.system(size: 12))
+                }
+                .buttonStyle(InstrumentButtonStyle())
+                .disabled(lastSystemPrompt == nil || isLoading || isInputEmpty)
+                .help("Regenerate (a fresh variation)")
+
                 Spacer()
+
+                // RESULT | DIFF toggle
+                HStack(spacing: 0) {
+                    ForEach(["RESULT", "DIFF"], id: \.self) { opt in
+                        let on = (opt == "DIFF") == showDiff
+                        Button { showDiff = (opt == "DIFF") } label: {
+                            Text(opt).font(.mono(9)).tracking(1)
+                                .foregroundStyle(on ? Theme.accentInk : Theme.textSecondary)
+                                .padding(.horizontal, 7).padding(.vertical, 4)
+                                .background(on ? Theme.accent : Color.clear)
+                        }.buttonStyle(.plain)
+                    }
+                }
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.hairline, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .opacity(outputText.isEmpty ? 0.4 : 1)
+                .disabled(outputText.isEmpty)
+            }
+        }
+    }
+
+    private var diffText: Text {
+        TextDiff.words(old: diffInput, new: outputText).reduce(Text("")) { acc, seg in
+            switch seg.kind {
+            case .same:    return acc + Text(seg.text).foregroundColor(Theme.textPrimary)
+            case .added:   return acc + Text(seg.text).foregroundColor(Theme.accent)
+            case .removed: return acc + Text(seg.text).foregroundColor(Theme.ledFail).strikethrough()
             }
         }
     }
@@ -319,24 +408,33 @@ struct PopoverView: View {
         inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private func run(systemPrompt: String, label: String) {
+    private func run(systemPrompt: String, label: String, variation: Bool = false) {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         currentTask?.cancel()
         errorMessage = nil
         isLoading = true
         outputText = ""
+        showDiff = false
+        fromClipboard = false
+        lastSystemPrompt = systemPrompt
+        lastLabel = label
+        diffInput = text
         let provider = settings.makeProvider()
+        var payload = RewriteAction.wrap(text)
+        if variation { payload += "\n\n(Give a noticeably different alternative version.)" }
 
         currentTask = Task {
             do {
-                let result = try await provider.stream(text: RewriteAction.wrap(text), systemPrompt: systemPrompt) { piece in
+                let raw = try await provider.stream(text: payload, systemPrompt: systemPrompt) { piece in
                     Task { @MainActor in outputText += piece }
                 }
+                let result = RewriteAction.clean(raw)
                 await MainActor.run {
                     outputText = result
                     isLoading = false
                     settings.addHistory(actionLabel: label, input: text, output: result)
+                    if settings.autoCopyResult { copyToClipboard() }
                     withAnimation(.easeOut(duration: 0.25)) { justFinished = true }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
                         withAnimation(.easeIn(duration: 0.5)) { justFinished = false }
@@ -348,6 +446,23 @@ struct PopoverView: View {
                     if !Task.isCancelled { errorMessage = error.localizedDescription }
                 }
             }
+        }
+    }
+
+    private func regenerate() {
+        guard let sp = lastSystemPrompt else { return }
+        run(systemPrompt: sp, label: lastLabel, variation: true)
+    }
+
+    private func autoFillFromClipboard() {
+        guard settings.autoFillClipboard, isInputEmpty else { return }
+        let pb = NSPasteboard.general
+        guard pb.changeCount != lastClipboardCount else { return }
+        lastClipboardCount = pb.changeCount
+        if let s = pb.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !s.isEmpty, s.count <= 8000 {
+            inputText = s
+            fromClipboard = true
         }
     }
 

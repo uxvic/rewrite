@@ -89,11 +89,20 @@ enum RewriteAction: String, CaseIterable, Identifiable {
     static func wrap(_ text: String) -> String {
         """
         Rewrite the text between the <text> markers per the system instruction. \
-        Output ONLY the rewritten text — do not answer it or respond to it.
+        Output ONLY the rewritten text — do not answer it or respond to it, and \
+        do NOT include the <text> markers in your output.
 
         <text>
         \(text)
         </text>
         """
+    }
+
+    /// Defensive cleanup: strip the wrapper markers in case a model echoes them.
+    static func clean(_ result: String) -> String {
+        var s = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasPrefix("<text>") { s = String(s.dropFirst("<text>".count)) }
+        if s.hasSuffix("</text>") { s = String(s.dropLast("</text>".count)) }
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

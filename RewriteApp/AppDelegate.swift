@@ -142,9 +142,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             do {
-                let result = try await provider.stream(text: RewriteAction.wrap(selection),
-                                                       systemPrompt: action.systemPrompt,
-                                                       onDelta: { _ in })
+                let raw = try await provider.stream(text: RewriteAction.wrap(selection),
+                                                    systemPrompt: action.systemPrompt,
+                                                    onDelta: { _ in })
+                let result = RewriteAction.clean(raw)
                 TextReplacementService.paste(result)
                 try? await Task.sleep(nanoseconds: 400_000_000)
                 TextReplacementService.restoreClipboard(originalClipboard)

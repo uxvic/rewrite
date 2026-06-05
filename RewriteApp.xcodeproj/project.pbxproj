@@ -29,6 +29,8 @@
 		3A0000000000000000000014 /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000014 /* Permissions.swift */; };
 		3A0000000000000000000015 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000015 /* WelcomeView.swift */; };
 		3A0000000000000000000016 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000016 /* AppIcon.icns */; };
+		3A0000000000000000000017 /* RewriteMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000017 /* RewriteMode.swift */; };
+		3A0000000000000000000018 /* TextDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000018 /* TextDiff.swift */; };
 		3A0000000000000000000020 /* Sparkle.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000020 /* Sparkle.framework */; };
 		3C0000000000000000000020 /* Sparkle.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000020 /* Sparkle.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -58,6 +60,8 @@
 		2A0000000000000000000014 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
 		2A0000000000000000000015 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		2A0000000000000000000016 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		2A0000000000000000000017 /* RewriteMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteMode.swift; sourceTree = "<group>"; };
+		2A0000000000000000000018 /* TextDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextDiff.swift; sourceTree = "<group>"; };
 		2A0000000000000000000020 /* Sparkle.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Sparkle.framework; path = Frameworks/Sparkle.framework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -128,6 +132,8 @@
 				2A0000000000000000000013 /* AppleOnDeviceProvider.swift */,
 				2A0000000000000000000014 /* Permissions.swift */,
 				2A0000000000000000000015 /* WelcomeView.swift */,
+				2A0000000000000000000017 /* RewriteMode.swift */,
+				2A0000000000000000000018 /* TextDiff.swift */,
 				2A0000000000000000000016 /* AppIcon.icns */,
 				1A0000000000000000000010 /* Info.plist */,
 			);
@@ -225,6 +231,8 @@
 				3A0000000000000000000013 /* AppleOnDeviceProvider.swift in Sources */,
 				3A0000000000000000000014 /* Permissions.swift in Sources */,
 				3A0000000000000000000015 /* WelcomeView.swift in Sources */,
+				3A0000000000000000000017 /* RewriteMode.swift in Sources */,
+				3A0000000000000000000018 /* TextDiff.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

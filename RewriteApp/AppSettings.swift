@@ -121,6 +121,15 @@ final class AppSettings: ObservableObject {
     @Published var recordingSounds: Bool {
         didSet { defaults.set(recordingSounds, forKey: "recordingSounds") }
     }
+    @Published var mode: RewriteMode {
+        didSet { defaults.set(mode.rawValue, forKey: "mode") }
+    }
+    @Published var autoFillClipboard: Bool {
+        didSet { defaults.set(autoFillClipboard, forKey: "autoFillClipboard") }
+    }
+    @Published var autoCopyResult: Bool {
+        didSet { defaults.set(autoCopyResult, forKey: "autoCopyResult") }
+    }
 
     @Published var history: [HistoryItem] {
         didSet { persist(history, key: "history") }
@@ -152,6 +161,9 @@ final class AppSettings: ObservableObject {
             .flatMap(RewriteAction.init(rawValue:)) ?? .paraphrase
         launchAtLogin = LoginItem.isEnabled
         recordingSounds = defaults.object(forKey: "recordingSounds") == nil ? true : defaults.bool(forKey: "recordingSounds")
+        mode = defaults.string(forKey: "mode").flatMap(RewriteMode.init(rawValue:)) ?? .writing
+        autoFillClipboard = defaults.object(forKey: "autoFillClipboard") == nil ? true : defaults.bool(forKey: "autoFillClipboard")
+        autoCopyResult = defaults.bool(forKey: "autoCopyResult")
         history = Self.read([HistoryItem].self, key: "history") ?? []
         customPresets = Self.read([CustomPreset].self, key: "customPresets") ?? []
     }

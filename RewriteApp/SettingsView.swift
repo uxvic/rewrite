@@ -60,6 +60,11 @@ struct SettingsView: View {
                 .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
             Toggle("Sound when recording starts/stops", isOn: $settings.recordingSounds)
                 .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+            Toggle("Pre-fill from clipboard on open", isOn: $settings.autoFillClipboard)
+                .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+            Toggle("Copy result automatically", isOn: $settings.autoCopyResult)
+                .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+            desc("Pre-fill reads your clipboard when the popover opens; macOS may briefly show a “pasted from…” note. Turn it off here if you prefer.")
             hotkeyRow("OPEN POPOVER", selection: $settings.popoverHotKeyID)
             hotkeyRow("REWRITE SELECTION", selection: $settings.inPlaceHotKeyID)
             HStack {
