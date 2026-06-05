@@ -60,6 +60,17 @@ echo "▸ Generating + EdDSA-signing appcast"
   --download-url-prefix "https://github.com/$GH_USER/$GH_REPO/releases/download/v$VERSION/"
 cp "$SPK/appcast.xml" "$ROOT/appcast.xml"
 
+# Legacy feed for pre-Sparkle users (v1.0.x): nudges them to download the latest
+# DMG once, after which they're on Sparkle and update automatically.
+cat > "$ROOT/version.json" <<EOF
+{
+  "version": "$VERSION",
+  "url": "https://github.com/$GH_USER/$GH_REPO/releases/latest/download/Rewrite.dmg",
+  "notes": "A new version of Rewrite is available. Download it once to switch to automatic updates.",
+  "minimumSystemVersion": "14.0"
+}
+EOF
+
 # Website DMG (manual download).
 echo "▸ Packaging dist/Rewrite.dmg"
 rm -rf "$OUT/dmg"; mkdir -p "$OUT/dmg"
