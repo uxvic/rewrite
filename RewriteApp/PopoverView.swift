@@ -109,6 +109,7 @@ struct PopoverView: View {
                         .foregroundStyle(active ? Theme.accentInk : Theme.textSecondary)
                         .frame(maxWidth: .infinity).padding(.vertical, 8)
                         .background(active ? Theme.accent : Color.clear)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -338,6 +339,7 @@ struct PopoverView: View {
                                 .foregroundStyle(on ? Theme.accentInk : Theme.textSecondary)
                                 .padding(.horizontal, 7).padding(.vertical, 4)
                                 .background(on ? Theme.accent : Color.clear)
+                                .contentShape(Rectangle())
                         }.buttonStyle(.plain)
                     }
                 }
