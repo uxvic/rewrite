@@ -17,9 +17,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 380, height: 640)
+        popover.contentSize = NSSize(width: 380, height: 668)
         popover.behavior = .transient
-        popover.contentViewController = NSHostingController(rootView: PopoverView())
+        // First-mouse hosting so a single click registers even when the agent
+        // app's popover window isn't the key window (fixes "click twice to act").
+        popover.contentViewController = FirstMouseHostingController(rootView: PopoverView())
 
         registerHotKeys()
         NotificationCenter.default.addObserver(self, selector: #selector(registerHotKeys),
@@ -168,4 +170,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.alertStyle = .warning
         alert.runModal()
     }
+}
+
+/// NSHostingView that accepts the first mouse click. In a menu-bar agent app the
+/// popover window often isn't key, so without this the first click on any control
+/// is consumed just to activate the window ("click twice to act").
+final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    @MainActor required init(rootView: Content) { super.init(rootView: rootView) }
+    @MainActor required init?(coder: NSCoder) { super.init(coder: coder) }
+}
+
+final class FirstMouseHostingController<Content: View>: NSHostingController<Content> {
+    override func loadView() { view = FirstMouseHostingView(rootView: rootView) }
 }

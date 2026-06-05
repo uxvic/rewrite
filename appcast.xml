@@ -3,15 +3,15 @@
     <channel>
         <title>Rewrite</title>
         <item>
-            <title>1.2.0</title>
-            <pubDate>Fri, 05 Jun 2026 11:30:45 +0300</pubDate>
-            <sparkle:version>1.2.0</sparkle:version>
-            <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
+            <title>1.2.1</title>
+            <pubDate>Fri, 05 Jun 2026 11:57:41 +0300</pubDate>
+            <sparkle:version>1.2.1</sparkle:version>
+            <sparkle:shortVersionString>1.2.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Rewrite 1.2.0</h2>
-<p>New: Prompt mode (turn rough prompts into great ones), clipboard auto-fill, Regenerate, grammar Diff view, and UI polish.</p>
+            <description><![CDATA[<h2>Rewrite 1.2.1</h2>
+<p>Fixes a bug where controls (mode tabs, settings) needed two clicks to respond.</p>
 ]]></description>
-            <enclosure url="https://github.com/uxvic/rewrite/releases/download/v1.2.0/Rewrite-1.2.0.zip" length="2221987" type="application/octet-stream" sparkle:edSignature="EVrr6oeGaDdw8Ou3khMP03ths2Wtz5dmobX97uz971W9VKN8YeK+SCJGJCjr6auKdUT3/NKEietPp+J7wuqyDg=="/>
+            <enclosure url="https://github.com/uxvic/rewrite/releases/download/v1.2.1/Rewrite-1.2.1.zip" length="2225828" type="application/octet-stream" sparkle:edSignature="/3EPIkN6a2iJkOgyta8vrf0US+JMC5ePiCdXApPfRrPGqlJyLP6FPBm5HiHQ1Wn11AY2lK43JDshvPkANxR7DA=="/>
         </item>
     </channel>
 </rss>

@@ -1,6 +1,6 @@
 {
-  "version": "1.2.0",
+  "version": "1.2.1",
   "url": "https://github.com/uxvic/rewrite/releases/latest/download/Rewrite.dmg",
-  "notes": "A new version of Rewrite is available. Download it once to switch to automatic updates — after this, Rewrite updates itself.",
+  "notes": "A new version of Rewrite is available. Download it once to switch to automatic updates.",
   "minimumSystemVersion": "14.0"
 }
