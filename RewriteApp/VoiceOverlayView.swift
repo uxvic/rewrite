@@ -71,16 +71,30 @@ struct VoiceOverlayView: View {
     // MARK: Transcript
 
     private var transcript: some View {
-        ScrollView {
-            Text(displayText)
-                .font(.system(size: 20, weight: .regular))
-                .foregroundStyle(transcriptColor)
-                .multilineTextAlignment(.center)
-                .lineSpacing(4)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 8)
+        ScrollViewReader { proxy in
+            ScrollView {
+                transcriptText
+                    .font(.system(size: 20, weight: .regular))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 8)
+                Color.clear.frame(height: 1).id("bottom")
+            }
+            .frame(maxHeight: 200)
+            .onChange(of: speech.transcript) { _, _ in
+                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
         }
-        .frame(maxHeight: 200)
+    }
+
+    /// Transcript text with a live acid caret while recording.
+    private var transcriptText: Text {
+        let base = Text(displayText).foregroundColor(transcriptColor)
+        if speech.isRecording && speech.errorMessage == nil {
+            return base + Text(" ▏").foregroundColor(Theme.accent)
+        }
+        return base
     }
 
     private var displayText: String {
