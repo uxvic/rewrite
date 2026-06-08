@@ -24,7 +24,7 @@ struct PopoverView: View {
     private enum Panel { case main, settings, history }
     @State private var panel: Panel = .main
 
-    @FocusState private var inputFocused: Bool
+    @State private var inputFocused = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,7 +46,6 @@ struct PopoverView: View {
         .background(Theme.bg)
         .onAppear {
             autoFillFromClipboard()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { inputFocused = true }
         }
         .onChange(of: settings.mode) { _, _ in showDiff = false }
         .onChange(of: speech.transcript) { _, newValue in
@@ -163,17 +162,14 @@ struct PopoverView: View {
             }
             ZStack(alignment: .bottomTrailing) {
                 ZStack(alignment: .topLeading) {
-                    TextEditor(text: $inputText)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.textPrimary)
-                        .scrollContentBackground(.hidden)
-                        .focused($inputFocused)
-                        .padding(8)
+                    AutoScrollTextEditor(text: $inputText, isFocused: $inputFocused,
+                                         font: .systemFont(ofSize: 13), textColor: Theme.nsTextPrimary,
+                                         autoScroll: speech.isRecording, autoFocus: true)
                         .frame(height: 78)
                     if inputText.isEmpty {
                         Text(settings.mode.inputPlaceholder)
                             .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                            .padding(12).allowsHitTesting(false)
+                            .padding(.horizontal, 13).padding(.vertical, 12).allowsHitTesting(false)
                     }
                 }
                 micButton.padding(8)

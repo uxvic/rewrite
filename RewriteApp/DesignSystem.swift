@@ -32,6 +32,7 @@ enum Theme {
     static let hairline  = Color(nsColor: .dynamic(light: "#D4D5CF", dark: "#2C3035"))
     static let textPrimary   = Color(nsColor: .dynamic(light: "#15171A", dark: "#F3F5F6"))
     static let textSecondary = Color(nsColor: .dynamic(light: "#6A6E72", dark: "#878D94"))
+    static let nsTextPrimary = NSColor.dynamic(light: "#15171A", dark: "#F3F5F6")
 
     static let accent    = Color(nsColor: NSColor(hex: "#CBFF2E"))
     static let accentInk  = Color(nsColor: NSColor(hex: "#0E0F0E"))
