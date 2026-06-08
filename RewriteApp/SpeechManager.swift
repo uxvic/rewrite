@@ -10,6 +10,8 @@ final class SpeechManager: ObservableObject {
     @Published var isRecording = false
     @Published var transcript = ""
     @Published var errorMessage: String?
+    /// Smoothed mic amplitude 0…1, for the reactive orb + waveform.
+    @Published var level: Float = 0
 
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private let audioEngine = AVAudioEngine()
@@ -62,6 +64,7 @@ final class SpeechManager: ObservableObject {
         inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             self?.request?.append(buffer)
+            self?.updateLevel(from: buffer)
         }
 
         audioEngine.prepare()
@@ -95,7 +98,20 @@ final class SpeechManager: ObservableObject {
         request = nil
         task = nil
         isRecording = false
+        level = 0
         if wasRecording { playChime("Pop") }
+    }
+
+    /// Computes a smoothed amplitude from the live mic buffer (audio thread → main).
+    nonisolated private func updateLevel(from buffer: AVAudioPCMBuffer) {
+        guard let ch = buffer.floatChannelData?[0] else { return }
+        let n = Int(buffer.frameLength)
+        guard n > 0 else { return }
+        var sum: Float = 0
+        for i in 0..<n { let s = ch[i]; sum += s * s }
+        let rms = (sum / Float(n)).squareRoot()
+        let mapped = min(1, rms * 18)
+        Task { @MainActor in self.level = self.level * 0.7 + mapped * 0.3 }
     }
 
     private func playChime(_ name: String) {

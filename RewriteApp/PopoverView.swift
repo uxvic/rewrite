@@ -20,6 +20,7 @@ struct PopoverView: View {
     @State private var fromClipboard = false
     @State private var lastClipboardCount = -1
     @State private var diffInput = ""
+    @State private var voiceMode = false
 
     private enum Panel { case main, settings, history }
     @State private var panel: Panel = .main
@@ -27,18 +28,24 @@ struct PopoverView: View {
     @State private var inputFocused = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            specBar
-            HairlineDivider()
-            if panel == .main {
-                modeSwitcher
-                HairlineDivider()
-            }
-            Group {
-                switch panel {
-                case .main:     mainContent
-                case .settings: SettingsView()
-                case .history:  historyPanel
+        Group {
+            if voiceMode {
+                VoiceOverlayView(speech: speech, onDone: finishVoice, onCancel: cancelVoice)
+            } else {
+                VStack(spacing: 0) {
+                    specBar
+                    HairlineDivider()
+                    if panel == .main {
+                        modeSwitcher
+                        HairlineDivider()
+                    }
+                    Group {
+                        switch panel {
+                        case .main:     mainContent
+                        case .settings: SettingsView()
+                        case .history:  historyPanel
+                        }
+                    }
                 }
             }
         }
@@ -49,7 +56,7 @@ struct PopoverView: View {
         }
         .onChange(of: settings.mode) { _, _ in showDiff = false }
         .onChange(of: speech.transcript) { _, newValue in
-            guard speech.isRecording else { return }
+            guard speech.isRecording, !voiceMode else { return }
             let separator = dictationBase.isEmpty ? "" : " "
             inputText = dictationBase + separator + newValue
         }
@@ -179,27 +186,35 @@ struct PopoverView: View {
     }
 
     private var micButton: some View {
-        ZStack {
-            if speech.isRecording {
-                Circle().stroke(Theme.ledFail.opacity(0.6), lineWidth: 2)
-                    .frame(width: 30, height: 30)
-                    .scaleEffect(pulse ? 1.7 : 1.0)
-                    .opacity(pulse ? 0 : 0.8)
-            }
-            Button {
-                if !speech.isRecording { dictationBase = inputText }
-                speech.toggle()
-            } label: {
-                Image(systemName: speech.isRecording ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(speech.isRecording ? Color.white : Theme.accentInk)
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(speech.isRecording ? Theme.ledFail : Theme.accent))
-                    .scaleEffect(speech.isRecording && pulse ? 1.1 : 1.0)
-            }
-            .buttonStyle(.plain)
-            .help(speech.isRecording ? "Stop dictation" : "Dictate")
+        Button { enterVoiceMode() } label: {
+            Image(systemName: "mic.fill")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.accentInk)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Theme.accent))
         }
+        .buttonStyle(.plain)
+        .help("Voice input")
+    }
+
+    private func enterVoiceMode() {
+        dictationBase = inputText
+        if !speech.isRecording { speech.toggle() }
+        voiceMode = true
+    }
+
+    private func finishVoice() {
+        let captured = speech.transcript
+        if speech.isRecording { speech.stop() }
+        let sep = dictationBase.isEmpty ? "" : " "
+        inputText = captured.isEmpty ? dictationBase : dictationBase + sep + captured
+        voiceMode = false
+        fromClipboard = false
+    }
+
+    private func cancelVoice() {
+        if speech.isRecording { speech.stop() }
+        voiceMode = false
     }
 
     private var actionsModule: some View {
