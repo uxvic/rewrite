@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Full-popover voice-capture takeover: a reactive acid orb, live transcript,
-/// and an amplitude-driven waveform. Reuses the app's design tokens.
+/// Full-popover voice-capture takeover: reactive flowing strands, live
+/// transcript, and an amplitude-driven waveform. Reuses the app's design tokens.
 struct VoiceOverlayView: View {
     @ObservedObject var speech: SpeechManager
     var onDone: () -> Void
@@ -13,7 +13,7 @@ struct VoiceOverlayView: View {
 
             VStack(spacing: 0) {
                 Spacer().frame(height: 56)
-                orb
+                strands
                 Spacer()
                 transcript
                 Spacer()
@@ -31,41 +31,36 @@ struct VoiceOverlayView: View {
         .onDisappear { speech.stop() }   // safety: never leave the mic running
     }
 
-    // MARK: Orb
+    // MARK: Strands
 
-    private var orb: some View {
-        TimelineView(.animation) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            let lvl = CGFloat(min(max(speech.level, 0), 1))
-            let breath = CGFloat(sin(t * 1.6)) * 0.03
-            ZStack {
-                Circle()
-                    .fill(Theme.accent)
-                    .frame(width: 210, height: 210)
-                    .blur(radius: 38 + lvl * 55)
-                    .opacity(0.16 + Double(lvl) * 0.5)
-                Circle()
-                    .fill(RadialGradient(
-                        colors: [
-                            Color(nsColor: NSColor(hex: "#F2FFC2")),
-                            Color(nsColor: NSColor(hex: "#CBFF2E")),
-                            Color(nsColor: NSColor(hex: "#5C7A12")),
-                            Color(nsColor: NSColor(hex: "#10130A"))
-                        ],
-                        center: UnitPoint(x: 0.36, y: 0.3),
-                        startRadius: 3, endRadius: 135))
-                    .frame(width: 184, height: 184)
-                    .overlay(
-                        Ellipse().fill(Color.white.opacity(0.22))
-                            .frame(width: 96, height: 42).blur(radius: 14)
-                            .offset(x: -18, y: -46).rotationEffect(.degrees(-18))
-                    )
-                    .overlay(Circle().stroke(Theme.accent.opacity(0.35), lineWidth: 1))
-                    .shadow(color: Theme.accent.opacity(0.3 + Double(lvl) * 0.4), radius: 20 + lvl * 30)
-            }
-            .scaleEffect(1 + breath + lvl * 0.24)
-        }
-        .frame(width: 220, height: 220)
+    /// Flowing, glowing strands that swell while the user talks, shown on a dark
+    /// "visualizer" panel so the additive neon reads in both light and dark mode.
+    private var strands: some View {
+        StrandsView(
+            colors: [
+                Color(nsColor: NSColor(hex: "#F97316")),
+                Color(nsColor: NSColor(hex: "#7C3AED")),
+                Color(nsColor: NSColor(hex: "#06B6D4"))
+            ],
+            count: 3, speed: 0.5, amplitude: 1, waviness: 1,
+            thickness: 0.7, glow: 2.6, taper: 3, spread: 1,
+            intensity: 0.6, scale: 1.5,
+            level: speech.level
+        )
+        .frame(maxWidth: .infinity)
+        .frame(height: 210)
+        .background(
+            RoundedRectangle(cornerRadius: Metric.window).fill(
+                LinearGradient(
+                    colors: [
+                        Color(nsColor: NSColor(hex: "#0B0C0E")),
+                        Color(nsColor: NSColor(hex: "#121417"))
+                    ],
+                    startPoint: .top, endPoint: .bottom))
+        )
+        .overlay(RoundedRectangle(cornerRadius: Metric.window)
+            .stroke(Theme.hairline.opacity(0.6), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: Metric.window))
     }
 
     // MARK: Transcript

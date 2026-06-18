@@ -10,7 +10,7 @@ final class SpeechManager: ObservableObject {
     @Published var isRecording = false
     @Published var transcript = ""
     @Published var errorMessage: String?
-    /// Smoothed mic amplitude 0…1, for the reactive orb + waveform.
+    /// Smoothed mic amplitude 0…1, for the reactive strands + waveform.
     @Published var level: Float = 0
 
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
