@@ -33,8 +33,10 @@ struct VoiceOverlayView: View {
 
     // MARK: Strands
 
-    /// Flowing, glowing strands that swell while the user talks, shown on a dark
-    /// "visualizer" panel so the additive neon reads in both light and dark mode.
+    /// Flowing, glowing strands that swell while the user talks. The web view is
+    /// transparent and the strands fade out at the edges, so they blend straight
+    /// into the overlay background — no card, no border. Full-bleed across the
+    /// window (cancels the parent's horizontal padding).
     private var strands: some View {
         StrandsView(
             colors: ["#F97316", "#7C3AED", "#06B6D4"],
@@ -44,19 +46,8 @@ struct VoiceOverlayView: View {
             level: speech.level
         )
         .frame(maxWidth: .infinity)
-        .frame(height: 210)
-        .background(
-            RoundedRectangle(cornerRadius: Metric.window).fill(
-                LinearGradient(
-                    colors: [
-                        Color(nsColor: NSColor(hex: "#0B0C0E")),
-                        Color(nsColor: NSColor(hex: "#121417"))
-                    ],
-                    startPoint: .top, endPoint: .bottom))
-        )
-        .overlay(RoundedRectangle(cornerRadius: Metric.window)
-            .stroke(Theme.hairline.opacity(0.6), lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: Metric.window))
+        .frame(height: 240)
+        .padding(.horizontal, -24)
     }
 
     // MARK: Transcript

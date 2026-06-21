@@ -28,11 +28,11 @@ struct StrandsView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         let web = WKWebView(frame: .zero, configuration: config)
-        // The page paints its own dark "visualizer" backdrop; round the corners
-        // on the layer so it sits cleanly inside the overlay.
         web.wantsLayer = true
-        web.layer?.cornerRadius = Metric.window
-        web.layer?.masksToBounds = true
+        // Transparent web view + transparent page, so the strands (which fade to
+        // nothing at the edges) float directly on the overlay background and
+        // blend with the whole page — no visible card or border.
+        web.setValue(false, forKey: "drawsBackground")
         web.loadHTMLString(Self.html(
             colors: colors, count: count, speed: speed, amplitude: amplitude,
             waviness: waviness, thickness: thickness, glow: glow, taper: taper,
@@ -59,8 +59,7 @@ struct StrandsView: NSViewRepresentable {
         """
         <!doctype html><html><head><meta charset='utf-8'>
         <style>
-          html,body{margin:0;height:100%;overflow:hidden;
-            background:linear-gradient(#0b0c0e,#121417);}
+          html,body{margin:0;height:100%;overflow:hidden;background:transparent;}
           canvas{display:block;width:100vw;height:100vh;}
         </style></head>
         <body><canvas id='gl'></canvas>
