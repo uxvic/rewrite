@@ -21,6 +21,9 @@ struct ChatTurn: Identifiable, Equatable {
 /// custom instruction to run on the latest source.
 enum ComposerMode { case text, instruction }
 
+/// An action picked from the action bar, applied to text when it's sent.
+struct SelectedAction: Equatable { let id: String; let systemPrompt: String; let label: String }
+
 struct PopoverView: View {
     @ObservedObject private var settings = AppSettings.shared
     @StateObject private var speech = SpeechManager()
@@ -28,6 +31,7 @@ struct PopoverView: View {
     @State private var thread: [ChatTurn] = []
     @State private var draft = ""
     @State private var composerMode: ComposerMode = .text
+    @State private var selectedAction: SelectedAction?
     @State private var isLoading = false
     @State private var currentTask: Task<Void, Never>?
     @State private var copiedTurnID: UUID?
@@ -60,6 +64,7 @@ struct PopoverView: View {
         .frame(width: 380, height: 668)
         .ambientBackground()
         .onAppear { autoFillFromClipboard() }
+        .onChange(of: settings.mode) { _, _ in selectedAction = nil; composerMode = .text }
     }
 
     // MARK: - Header
@@ -126,7 +131,6 @@ struct PopoverView: View {
                     } else {
                         ForEach(thread) { turn in turnView(turn) }
                     }
-                    if canAct { chipsRow }
                     Color.clear.frame(height: 1).id("bottom")
                 }
                 .padding(16)
@@ -251,52 +255,73 @@ struct PopoverView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Action chips
+    // MARK: - Action bar (pick an action, then type & send)
 
-    private var chipsRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(thread.contains { $0.role == .assistant } ? "Try another" : "Rewrite as")
-                .font(.system(size: 12, weight: .semibold)).tracking(0.3).foregroundStyle(Theme.textSecondary)
-            FlowLayout(spacing: 7) {
+    /// Horizontal, scrollable row of actions under the composer. Tap to select;
+    /// the selected action is applied to the text when it's sent.
+    private var actionBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 7) {
                 ForEach(Array(settings.mode.actions.enumerated()), id: \.element.id) { idx, action in
-                    actionChip(icon: action.systemImage, label: action.label) {
-                        run(systemPrompt: action.systemPrompt, label: action.label)
+                    selectableChip(icon: action.systemImage, label: action.label,
+                                   selected: selectedAction?.id == action.id) {
+                        selectAction(SelectedAction(id: action.id, systemPrompt: action.systemPrompt, label: action.label))
                     }
                     .keyboardShortcut(shortcutKey(idx), modifiers: .command)
                 }
                 ForEach(settings.customPresets) { preset in
-                    actionChip(icon: "star", label: preset.label) {
-                        run(systemPrompt: RewriteAction.customSystemPrompt(preset.instruction), label: preset.label)
+                    selectableChip(icon: "star", label: preset.label,
+                                   selected: selectedAction?.id == preset.id) {
+                        selectAction(SelectedAction(id: preset.id,
+                                                    systemPrompt: RewriteAction.customSystemPrompt(preset.instruction),
+                                                    label: preset.label))
                     }
                 }
-                actionChip(icon: "wand.and.rays", label: "Custom…",
-                           prominent: composerMode == .instruction) {
-                    composerMode = .instruction
+                selectableChip(icon: "wand.and.rays", label: "Custom…",
+                               selected: composerMode == .instruction) {
+                    toggleCustom()
                 }
             }
+            .padding(.horizontal, 2).padding(.vertical, 1)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func actionChip(icon: String, label: String, prominent: Bool = false,
-                            _ action: @escaping () -> Void) -> some View {
+    private func selectableChip(icon: String, label: String, selected: Bool,
+                                _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: icon).font(.system(size: 11))
-                    .foregroundStyle(prominent ? Theme.accentInk : Theme.textSecondary)
+                    .foregroundStyle(selected ? Theme.accentInk : Theme.textSecondary)
                 Text(label).font(.system(size: 12.5))
-                    .foregroundStyle(prominent ? Theme.accentInk : Theme.textPrimary)
+                    .foregroundStyle(selected ? Theme.accentInk : Theme.textPrimary)
             }
             .padding(.horizontal, 13).padding(.vertical, 8)
-            .background(Capsule().fill(prominent ? Theme.accent : Theme.fillTranslucent.opacity(0.06)))
+            .background(Capsule().fill(selected ? Theme.accent : Theme.fillTranslucent.opacity(0.06)))
             .overlay {
-                if !prominent { Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1) }
+                if !selected { Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1) }
             }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .disabled(isLoading)
-        .opacity(isLoading ? 0.5 : 1)
+        .opacity(isLoading ? 0.6 : 1)
+        .fixedSize()
+    }
+
+    /// Select (or toggle off) an action. If text is already in the thread and the
+    /// composer is empty, apply it immediately; otherwise it runs on the next send.
+    private func selectAction(_ sel: SelectedAction) {
+        composerMode = .text
+        if selectedAction?.id == sel.id { selectedAction = nil; return }
+        selectedAction = sel
+        if draftIsEmpty && !latestUserText.isEmpty && !isLoading {
+            run(systemPrompt: sel.systemPrompt, label: sel.label)
+        }
+    }
+
+    private func toggleCustom() {
+        selectedAction = nil
+        composerMode = (composerMode == .instruction) ? .text : .instruction
     }
 
     private func shortcutKey(_ index: Int) -> KeyEquivalent {
@@ -307,17 +332,19 @@ struct PopoverView: View {
     // MARK: - Composer (Siri bottom bar: + · glass field · mic/send)
 
     private var composer: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 8) {
             HStack(alignment: .center, spacing: 8) {
-                IconButton(systemName: "plus", disabled: thread.isEmpty && draft.isEmpty, help: "New chat") {
+                IconButton(systemName: "plus",
+                           disabled: thread.isEmpty && draft.isEmpty && selectedAction == nil && composerMode == .text,
+                           help: "New chat") {
                     newChat()
                 }
                 composerField
                 rightComposerButton
             }
-            composerHint
+            actionBar
         }
-        .padding(.horizontal, 12).padding(.vertical, 12)
+        .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 10)
     }
 
     private var composerField: some View {
@@ -357,23 +384,8 @@ struct PopoverView: View {
 
     private var composerPlaceholder: String {
         if composerMode == .instruction { return "Describe how to rewrite…  (⌘↩)" }
+        if let sel = selectedAction { return "Type, then send to \(sel.label.lowercased())…" }
         return thread.isEmpty ? settings.mode.inputPlaceholder : "Add text or a reply…"
-    }
-
-    private var composerHint: some View {
-        HStack {
-            if isLoading {
-                Text("Streaming…").font(.system(size: 11)).foregroundStyle(Theme.accent)
-            } else if composerMode == .instruction {
-                Text("Custom instruction").font(.system(size: 11)).foregroundStyle(Theme.accent)
-            } else {
-                Text("\(wordCount(draft)) words").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
-            }
-            Spacer()
-            Text(canAct ? "⌘1–\(min(settings.mode.actions.count, 9)) actions" : "⌘↩ send")
-                .font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
-        }
-        .padding(.horizontal, 6)
     }
 
     // MARK: - History panel
@@ -434,12 +446,7 @@ struct PopoverView: View {
         }
         return ""
     }
-    private var canAct: Bool { !latestUserText.isEmpty && !isLoading }
     private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-
-    private func wordCount(_ s: String) -> Int {
-        s.split { $0 == " " || $0 == "\n" || $0 == "\t" }.count
-    }
 
     // MARK: - Actions
 
@@ -453,6 +460,9 @@ struct PopoverView: View {
         } else {
             thread.append(ChatTurn(role: .user, text: t, fromClipboard: fromClipboard))
             draft = ""; fromClipboard = false
+            if let sel = selectedAction {
+                run(systemPrompt: sel.systemPrompt, label: sel.label)
+            }
         }
     }
 
@@ -511,6 +521,7 @@ struct PopoverView: View {
         thread = []
         draft = ""
         composerMode = .text
+        selectedAction = nil
         fromClipboard = false
         copiedTurnID = nil
     }
@@ -551,38 +562,5 @@ struct PopoverView: View {
     private func setClipboard(_ s: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
-    }
-}
-
-/// A simple wrapping layout (left-aligned rows) for the action chips.
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 7
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? .infinity
-        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
-        for sv in subviews {
-            let size = sv.sizeThatFits(.unspecified)
-            if x > 0 && x + size.width > maxWidth {
-                x = 0; y += rowHeight + spacing; rowHeight = 0
-            }
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-        let width = maxWidth == .infinity ? x : maxWidth
-        return CGSize(width: width, height: y + rowHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x: CGFloat = bounds.minX, y: CGFloat = bounds.minY, rowHeight: CGFloat = 0
-        for sv in subviews {
-            let size = sv.sizeThatFits(.unspecified)
-            if x > bounds.minX && x + size.width > bounds.maxX {
-                x = bounds.minX; y += rowHeight + spacing; rowHeight = 0
-            }
-            sv.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
     }
 }

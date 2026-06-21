@@ -235,36 +235,44 @@ private struct HostedSignInView: View {
     @State private var code = ""
     @State private var busy = false
     @State private var error: String?
+    @State private var info: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if settings.isSignedInToHosted {
                 HStack(spacing: 6) {
                     LEDDot(color: Theme.accent)
-                    Text("SIGNED IN · \(settings.hostedEmail.uppercased())")
-                        .font(.mono(10)).tracking(1).foregroundStyle(Theme.accent).lineLimit(1)
+                    Text("Signed in · \(settings.hostedEmail)")
+                        .font(.system(size: 11)).foregroundStyle(Theme.accent).lineLimit(1)
                     Spacer()
-                    Button { signOut() } label: { Text("SIGN OUT") }
+                    Button { signOut() } label: { Text("Sign out") }
                         .buttonStyle(InstrumentButtonStyle()).controlSize(.small)
                 }
             } else {
                 switch stage {
                 case .email:
                     TextField("you@example.com", text: $email).textFieldStyle(CapsuleFieldStyle())
-                    Button { start() } label: { Text(busy ? "SENDING…" : "SEND CODE") }
+                    Button { start() } label: { Text(busy ? "Sending…" : "Send code") }
                         .buttonStyle(InstrumentButtonStyle(prominent: true))
                         .disabled(busy || !email.contains("@"))
                 case .code:
-                    desc("We emailed a 6-digit code to \(email).")
+                    desc("Enter the 6-digit code we emailed to \(email).")
                     TextField("123456", text: $code).textFieldStyle(CapsuleFieldStyle())
                     HStack {
-                        Button { verify() } label: { Text(busy ? "VERIFYING…" : "VERIFY") }
+                        Button { verify() } label: { Text(busy ? "Verifying…" : "Verify") }
                             .buttonStyle(InstrumentButtonStyle(prominent: true))
                             .disabled(busy || code.count != 6)
-                        Button { stage = .email; code = ""; error = nil } label: { Text("BACK") }
+                        Button { resend() } label: { Text("Resend") }
+                            .buttonStyle(InstrumentButtonStyle())
+                            .disabled(busy)
+                        Button { stage = .email; code = ""; error = nil; info = nil } label: { Text("Back") }
                             .buttonStyle(InstrumentButtonStyle())
                     }
                 }
+            }
+            if let info {
+                Text(info).font(.system(size: 11)).foregroundStyle(Theme.accent)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let error {
                 Text(error).font(.system(size: 11)).foregroundStyle(Theme.ledFail)
@@ -279,21 +287,36 @@ private struct HostedSignInView: View {
     }
 
     private func start() {
-        busy = true; error = nil
+        busy = true; error = nil; info = nil
         let e = email.trimmingCharacters(in: .whitespaces).lowercased()
         let url = settings.gatewayBaseURL
         Task {
             do {
                 try await GatewayAuth.start(email: e, baseURL: url)
-                await MainActor.run { email = e; stage = .code; busy = false }
+                await MainActor.run { email = e; stage = .code; busy = false; info = "Code sent to \(e)." }
             } catch {
-                await MainActor.run { self.error = error.localizedDescription; busy = false }
+                await MainActor.run { self.error = friendly(error); busy = false }
+            }
+        }
+    }
+
+    /// Re-request a code for the email already entered.
+    private func resend() {
+        guard !busy else { return }
+        busy = true; error = nil; info = nil
+        let e = email; let url = settings.gatewayBaseURL
+        Task {
+            do {
+                try await GatewayAuth.start(email: e, baseURL: url)
+                await MainActor.run { busy = false; info = "New code sent to \(e)." }
+            } catch {
+                await MainActor.run { self.error = friendly(error); busy = false }
             }
         }
     }
 
     private func verify() {
-        busy = true; error = nil
+        busy = true; error = nil; info = nil
         let e = email; let c = code; let url = settings.gatewayBaseURL
         Task {
             do {
@@ -304,9 +327,20 @@ private struct HostedSignInView: View {
                     busy = false; code = ""; stage = .email
                 }
             } catch {
-                await MainActor.run { self.error = error.localizedDescription; busy = false }
+                await MainActor.run { self.error = friendly(error); busy = false }
             }
         }
+    }
+
+    /// Map raw network failures (e.g. the placeholder gateway host not resolving)
+    /// to a clearer explanation.
+    private func friendly(_ error: Error) -> String {
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain {
+            return "Couldn't reach the sign-in server — the free-models gateway isn't set up yet. "
+                 + "Deploy the Worker in gateway/ and set its URL under Advanced. (\(ns.localizedDescription))"
+        }
+        return error.localizedDescription
     }
 
     private func signOut() {
