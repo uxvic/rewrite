@@ -69,41 +69,44 @@ struct PopoverView: View {
     // MARK: - Spec bar
 
     private var specBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Text("REWRITE").font(.display(16)).tracking(2).foregroundStyle(Theme.textPrimary)
-            Text("v\(appVersion)").font(.mono(9)).tracking(1).foregroundStyle(Theme.textSecondary)
             Spacer()
-            LEDDot(color: Theme.accent)
-            Text(providerShortName.uppercased()).font(.mono(10)).tracking(2).foregroundStyle(Theme.textSecondary)
             if panel == .main {
-                Button { newChat() } label: {
-                    Image(systemName: "square.and.pencil").foregroundStyle(Theme.textSecondary)
-                }
-                .buttonStyle(.borderless).help("New chat")
-                .disabled(thread.isEmpty && draft.isEmpty)
+                headerButton(icon: "square.and.pencil", help: "New chat",
+                             disabled: thread.isEmpty && draft.isEmpty) { newChat() }
             }
-            Button { panel = (panel == .history) ? .main : .history } label: {
-                Image(systemName: "clock.arrow.circlepath").foregroundStyle(Theme.textSecondary)
-            }.buttonStyle(.borderless).help("History")
-            Button { panel = (panel == .settings) ? .main : .settings } label: {
-                Image(systemName: panel == .settings ? "chevron.left" : "gearshape").foregroundStyle(Theme.textSecondary)
-            }.buttonStyle(.borderless).help("Settings")
+            headerButton(icon: "clock.arrow.circlepath", help: "History",
+                         active: panel == .history) {
+                panel = (panel == .history) ? .main : .history
+            }
+            headerButton(icon: panel == .settings ? "chevron.left" : "gearshape",
+                         help: "Settings", active: panel == .settings) {
+                panel = (panel == .settings) ? .main : .settings
+            }
         }
-        .padding(.horizontal, 16).padding(.vertical, 13)
+        .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
-    private var providerShortName: String {
-        switch settings.provider {
-        case .appleOnDevice: return "On-device"
-        case .hosted:        return "Free"
-        case .anthropic:     return "Claude"
-        case .claudeCode:    return "Claude Code"
-        case .ollama:        return "Ollama"
+    /// A prominent, boxed header control — primary-colored icon in a panel,
+    /// filled with the accent when its panel is active.
+    private func headerButton(icon: String, help: String, active: Bool = false,
+                              disabled: Bool = false, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(active ? Theme.accentInk : Theme.textPrimary)
+                .frame(width: 32, height: 32)
+                .background(RoundedRectangle(cornerRadius: Metric.buttonRadius)
+                    .fill(active ? Theme.accent : Theme.panel))
+                .overlay(RoundedRectangle(cornerRadius: Metric.buttonRadius)
+                    .stroke(active ? Theme.accent : Theme.hairline, lineWidth: 1))
+                .contentShape(Rectangle())
         }
-    }
-
-    private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.4 : 1)
+        .help(help)
     }
 
     // MARK: - Mode switcher
