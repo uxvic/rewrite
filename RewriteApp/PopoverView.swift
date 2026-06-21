@@ -36,6 +36,7 @@ struct PopoverView: View {
     @State private var composerMode: ComposerMode = .text
     @State private var selectedAction: SelectedAction?
     @State private var pendingRetry: PendingRun?
+    @State private var showSelectPrompt = false
     @State private var isLoading = false
     @State private var currentTask: Task<Void, Never>?
     @State private var copiedTurnID: UUID?
@@ -68,7 +69,7 @@ struct PopoverView: View {
         .frame(width: 380, height: 668)
         .ambientBackground()
         .onAppear { autoFillFromClipboard() }
-        .onChange(of: settings.mode) { _, _ in selectedAction = nil; composerMode = .text }
+        .onChange(of: settings.mode) { _, _ in selectedAction = nil; composerMode = .text; showSelectPrompt = false }
     }
 
     // MARK: - Header
@@ -316,15 +317,12 @@ struct PopoverView: View {
         .fixedSize()
     }
 
-    /// Select (or toggle off) an action. If text is already in the thread and the
-    /// composer is empty, apply it immediately; otherwise it runs on the next send.
+    /// Select (or toggle off) an action — a pure selector. Nothing runs until the
+    /// text is sent.
     private func selectAction(_ sel: SelectedAction) {
         composerMode = .text
-        if selectedAction?.id == sel.id { selectedAction = nil; return }
-        selectedAction = sel
-        if draftIsEmpty && !latestUserText.isEmpty && !isLoading {
-            run(systemPrompt: sel.systemPrompt, label: sel.label)
-        }
+        showSelectPrompt = false
+        selectedAction = (selectedAction?.id == sel.id) ? nil : sel
     }
 
     private func toggleCustom() {
@@ -341,6 +339,7 @@ struct PopoverView: View {
 
     private var composer: some View {
         VStack(spacing: 8) {
+            if showSelectPrompt && !draftIsEmpty { selectPrompt }
             HStack(alignment: .center, spacing: 8) {
                 IconButton(systemName: "plus",
                            disabled: thread.isEmpty && draft.isEmpty && selectedAction == nil && composerMode == .text,
@@ -353,6 +352,23 @@ struct PopoverView: View {
             actionBar
         }
         .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 10)
+    }
+
+    /// Nudge shown above the input when you try to send without picking an action.
+    private var selectPrompt: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.turn.left.down").font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.accent)
+            Text("Pick how to rewrite it below").font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.textPrimary)
+            Spacer(minLength: 6)
+            Button { sendAsIs() } label: {
+                Text("Send as-is").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.accent)
+            }.buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 9)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.fillTranslucent.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.accent.opacity(0.4), lineWidth: 1))
     }
 
     private var composerField: some View {
@@ -465,13 +481,26 @@ struct PopoverView: View {
             guard !latestUserText.isEmpty else { composerMode = .text; return }
             draft = ""; composerMode = .text
             run(systemPrompt: RewriteAction.customSystemPrompt(t), label: "Custom: \(t)")
-        } else {
-            thread.append(ChatTurn(role: .user, text: t, fromClipboard: fromClipboard))
-            draft = ""; fromClipboard = false
-            if let sel = selectedAction {
-                run(systemPrompt: sel.systemPrompt, label: sel.label)
-            }
+            return
         }
+        guard let sel = selectedAction else {
+            showSelectPrompt = true   // nudge: pick how to rewrite, or "Send as-is"
+            return
+        }
+        addUserTurn(t)
+        run(systemPrompt: sel.systemPrompt, label: sel.label)
+    }
+
+    /// Send the text as a plain note (no rewrite).
+    private func sendAsIs() {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { showSelectPrompt = false; return }
+        addUserTurn(t)
+    }
+
+    private func addUserTurn(_ t: String) {
+        thread.append(ChatTurn(role: .user, text: t, fromClipboard: fromClipboard))
+        draft = ""; fromClipboard = false; showSelectPrompt = false
     }
 
     private func run(systemPrompt: String, label: String, variation: Bool = false, source: String? = nil) {
@@ -561,6 +590,7 @@ struct PopoverView: View {
         composerMode = .text
         selectedAction = nil
         pendingRetry = nil
+        showSelectPrompt = false
         fromClipboard = false
         copiedTurnID = nil
     }
@@ -577,7 +607,7 @@ struct PopoverView: View {
         if speech.isRecording { speech.stop() }
         voiceMode = false
         guard !captured.isEmpty else { return }
-        thread.append(ChatTurn(role: .user, text: captured))
+        draft = draft.isEmpty ? captured : draft + " " + captured
     }
 
     private func cancelVoice() {
@@ -594,7 +624,8 @@ struct PopoverView: View {
         lastClipboardCount = pb.changeCount
         if let s = pb.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !s.isEmpty, s.count <= 8000 {
-            thread.append(ChatTurn(role: .user, text: s, fromClipboard: true))
+            draft = s
+            fromClipboard = true
         }
     }
 
