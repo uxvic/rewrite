@@ -4,7 +4,7 @@ import AppKit
 /// One message in the rewrite conversation. User turns hold the source text;
 /// assistant turns hold a rewrite (streamed in) plus the action that produced it.
 struct ChatTurn: Identifiable, Equatable {
-    enum Role { case user, assistant }
+    enum Role { case user, assistant, setup }
     let id = UUID()
     var role: Role
     var text: String
@@ -24,6 +24,9 @@ enum ComposerMode { case text, instruction }
 /// An action picked from the action bar, applied to text when it's sent.
 struct SelectedAction: Equatable { let id: String; let systemPrompt: String; let label: String }
 
+/// A run to re-attempt after the user finishes provider setup in the chat.
+struct PendingRun: Equatable { let systemPrompt: String; let label: String; let source: String }
+
 struct PopoverView: View {
     @ObservedObject private var settings = AppSettings.shared
     @StateObject private var speech = SpeechManager()
@@ -32,6 +35,7 @@ struct PopoverView: View {
     @State private var draft = ""
     @State private var composerMode: ComposerMode = .text
     @State private var selectedAction: SelectedAction?
+    @State private var pendingRetry: PendingRun?
     @State private var isLoading = false
     @State private var currentTask: Task<Void, Never>?
     @State private var copiedTurnID: UUID?
@@ -154,7 +158,11 @@ struct PopoverView: View {
 
     @ViewBuilder
     private func turnView(_ turn: ChatTurn) -> some View {
-        if turn.role == .user { userBubble(turn) } else { assistantTurn(turn) }
+        switch turn.role {
+        case .user:      userBubble(turn)
+        case .assistant: assistantTurn(turn)
+        case .setup:     SetupCardView(onReady: retryPending) { dismissSetup(turn.id) }
+        }
     }
 
     private func userBubble(_ turn: ChatTurn) -> some View {
@@ -499,6 +507,14 @@ struct PopoverView: View {
                     if Task.isCancelled {
                         thread.removeAll { $0.id == id && $0.text.isEmpty }
                         mutateTurn(id) { $0.isStreaming = false }
+                    } else if isSetupError(error) {
+                        // Provider isn't set up — show an inline setup card instead
+                        // of a raw error, and remember what to retry afterwards.
+                        thread.removeAll { $0.id == id }
+                        pendingRetry = PendingRun(systemPrompt: systemPrompt, label: label, source: src)
+                        if !thread.contains(where: { $0.role == .setup }) {
+                            thread.append(ChatTurn(role: .setup, text: ""))
+                        }
                     } else {
                         mutateTurn(id) {
                             $0.text = error.localizedDescription
@@ -515,6 +531,28 @@ struct PopoverView: View {
         if let i = thread.firstIndex(where: { $0.id == id }) { change(&thread[i]) }
     }
 
+    /// True for "provider isn't configured" errors that the inline setup card can fix.
+    private func isSetupError(_ error: Error) -> Bool {
+        guard let re = error as? RewriteError else { return false }
+        switch re {
+        case .signedOut, .missingAPIKey, .ollamaUnreachable, .claudeCodeNotFound: return true
+        default: return false
+        }
+    }
+
+    /// Re-run the action that triggered the setup card, now that it's configured.
+    private func retryPending() {
+        guard let p = pendingRetry else { return }
+        thread.removeAll { $0.role == .setup }
+        pendingRetry = nil
+        run(systemPrompt: p.systemPrompt, label: p.label, source: p.source)
+    }
+
+    private func dismissSetup(_ id: UUID) {
+        thread.removeAll { $0.id == id }
+        pendingRetry = nil
+    }
+
     private func newChat() {
         currentTask?.cancel()
         isLoading = false
@@ -522,6 +560,7 @@ struct PopoverView: View {
         draft = ""
         composerMode = .text
         selectedAction = nil
+        pendingRetry = nil
         fromClipboard = false
         copiedTurnID = nil
     }
@@ -562,5 +601,90 @@ struct PopoverView: View {
     private func setClipboard(_ s: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
+    }
+}
+
+/// Inline card shown in the chat when the chosen provider needs setup. Lets the
+/// user pick a provider and (for Free models) sign in with an email code without
+/// leaving the chat, then retry the action that failed.
+struct SetupCardView: View {
+    var onReady: () -> Void
+    var onDismiss: () -> Void
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles").font(.system(size: 14)).foregroundStyle(Theme.accent)
+                Text("Set up a model").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                Spacer()
+                Button { onDismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                }.buttonStyle(.plain).help("Dismiss")
+            }
+
+            Text(subtitle).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(spacing: 2) {
+                ForEach(LLMProvider.allCases) { providerRow($0) }
+            }
+
+            if settings.provider == .hosted && !settings.isSignedInToHosted {
+                HostedSignInView()
+            } else if needsKey {
+                Text("Add your Claude API key in Settings → Claude to use this provider.")
+                    .font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if isReady {
+                Button { onReady() } label: { Text("Try again") }
+                    .buttonStyle(InstrumentButtonStyle(prominent: true))
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .module(Theme.surface)
+        .padding(.trailing, 8)
+    }
+
+    private func providerRow(_ p: LLMProvider) -> some View {
+        Button { settings.provider = p } label: {
+            HStack(spacing: 8) {
+                Image(systemName: settings.provider == p ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 13))
+                    .foregroundStyle(settings.provider == p ? Theme.accent : Theme.textSecondary)
+                Text(p.displayName).font(.system(size: 12.5)).foregroundStyle(Theme.textPrimary)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var isReady: Bool {
+        switch settings.provider {
+        case .appleOnDevice:       return AppleOnDeviceProvider.isAvailable
+        case .hosted:              return settings.isSignedInToHosted
+        case .anthropic:           return !settings.apiKey.isEmpty
+        case .claudeCode, .ollama: return true
+        }
+    }
+
+    private var needsKey: Bool {
+        settings.provider == .anthropic && settings.apiKey.isEmpty
+    }
+
+    private var subtitle: String {
+        if settings.provider == .hosted && !settings.isSignedInToHosted {
+            return "Free models need a quick email sign-in (it adds you to the newsletter). Or choose another provider below."
+        }
+        if settings.provider == .appleOnDevice && !AppleOnDeviceProvider.isAvailable {
+            return "Built-in AI isn't available on this Mac. Pick another provider below."
+        }
+        return "Choose a model provider to continue — you can change it anytime in Settings."
     }
 }

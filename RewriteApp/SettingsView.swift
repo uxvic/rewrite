@@ -227,7 +227,7 @@ struct SettingsView: View {
 
 // MARK: - Hosted sign-in
 
-private struct HostedSignInView: View {
+struct HostedSignInView: View {
     @ObservedObject private var settings = AppSettings.shared
     private enum Stage { case email, code }
     @State private var stage: Stage = .email
