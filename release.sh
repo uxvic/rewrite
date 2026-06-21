@@ -23,6 +23,35 @@ PLIST="$ROOT/RewriteApp/Info.plist"
 ENT="$ROOT/RewriteApp/Rewrite.entitlements"
 BIN="$ROOT/Frameworks/bin"
 
+# --- Safety guard: never build from a stale or dirty checkout ---------------
+# Two earlier releases shipped old code because release.sh built from a local
+# branch that was behind origin (with leftover modified files). Catch that here.
+echo "▸ Checking working tree + sync with origin"
+git -C "$ROOT" fetch --quiet origin 2>/dev/null || echo "  (warning: git fetch failed — continuing offline)"
+
+if [ -n "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ]; then
+  echo "✋ Uncommitted changes in tracked files. Commit, stash, or 'git reset --hard origin/main' first:"
+  git -C "$ROOT" status --short --untracked-files=no
+  exit 1
+fi
+
+if upstream=$(git -C "$ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null); then
+  localsha=$(git -C "$ROOT" rev-parse @)
+  remotesha=$(git -C "$ROOT" rev-parse '@{u}')
+  basesha=$(git -C "$ROOT" merge-base @ '@{u}')
+  if [ "$localsha" != "$remotesha" ] && [ "$localsha" = "$basesha" ]; then
+    echo "✋ Your branch is BEHIND $upstream. Run 'git pull' (or 'git reset --hard $upstream') before releasing."
+    exit 1
+  fi
+  if [ "$localsha" != "$remotesha" ] && [ "$remotesha" != "$basesha" ] && [ "$localsha" != "$basesha" ]; then
+    echo "✋ Your branch has DIVERGED from $upstream. Reconcile (pull/rebase) before releasing."
+    exit 1
+  fi
+else
+  echo "  (no upstream tracking branch — skipping behind/diverged check)"
+fi
+# ---------------------------------------------------------------------------
+
 echo "▸ Version $VERSION"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST"
