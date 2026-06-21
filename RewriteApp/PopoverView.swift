@@ -40,7 +40,7 @@ struct PopoverView: View {
     @State private var isLoading = false
     @State private var currentTask: Task<Void, Never>?
     @State private var copiedTurnID: UUID?
-    @State private var composerFocused = false
+    @FocusState private var composerFocused: Bool
     @State private var voiceMode = false
     @State private var fromClipboard = false
     @State private var lastClipboardCount = -1
@@ -68,7 +68,7 @@ struct PopoverView: View {
         }
         .frame(width: 380, height: 668)
         .ambientBackground()
-        .onAppear { autoFillFromClipboard() }
+        .onAppear { autoFillFromClipboard(); DispatchQueue.main.async { composerFocused = true } }
         .onChange(of: settings.mode) { _, _ in selectedAction = nil; composerMode = .text; showSelectPrompt = false }
     }
 
@@ -340,14 +340,14 @@ struct PopoverView: View {
     private var composer: some View {
         VStack(spacing: 8) {
             if showSelectPrompt && !draftIsEmpty { selectPrompt }
-            HStack(alignment: .center, spacing: 8) {
-                IconButton(systemName: "plus",
+            HStack(alignment: .bottom, spacing: 8) {
+                IconButton(systemName: "plus", size: 34,
                            disabled: thread.isEmpty && draft.isEmpty && selectedAction == nil && composerMode == .text,
                            help: "New chat") {
                     newChat()
                 }
                 composerField
-                rightComposerButton
+                IconButton(systemName: "mic.fill", size: 34, help: "Dictate") { enterVoiceMode() }
             }
             actionBar
         }
@@ -371,39 +371,45 @@ struct PopoverView: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.accent.opacity(0.4), lineWidth: 1))
     }
 
+    /// Growing pill input (1→~4 lines, then scrolls) with the send button inside.
     private var composerField: some View {
-        ZStack(alignment: .topLeading) {
-            if draft.isEmpty {
-                Text(composerPlaceholder)
-                    .font(.system(size: 13.5)).foregroundStyle(Theme.textSecondary)
-                    .padding(.horizontal, 14).padding(.vertical, 11).allowsHitTesting(false)
+        HStack(alignment: .bottom, spacing: 6) {
+            TextField(composerPlaceholder, text: $draft, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13.5))
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(1...4)
+                .focused($composerFocused)
+                .padding(.leading, 10)
+                .padding(.vertical, 4)
+            if isLoading {
+                insideButton("stop.fill") { currentTask?.cancel() }
+                    .keyboardShortcut(".", modifiers: .command)
+            } else if !draftIsEmpty {
+                insideButton("arrow.up") { sendDraft() }
+                    .keyboardShortcut(.return, modifiers: .command)
             }
-            AutoScrollTextEditor(text: $draft, isFocused: $composerFocused,
-                                 font: .systemFont(ofSize: 13.5), textColor: Theme.nsTextPrimary,
-                                 autoScroll: false, autoFocus: true)
-                .frame(height: 40)
-                .padding(.horizontal, 6)
         }
+        .padding(.horizontal, 5).padding(.vertical, 5)
         .frame(maxWidth: .infinity)
-        .background(Capsule().fill(.ultraThinMaterial))
-        .overlay(Capsule().stroke(
-            (composerMode == .instruction || composerFocused)
-                ? Theme.accent.opacity(0.6) : Theme.fillTranslucent.opacity(0.08),
-            lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 21, style: .continuous).fill(.ultraThinMaterial))
+        .overlay(RoundedRectangle(cornerRadius: 21, style: .continuous).stroke(composerBorder, lineWidth: 1))
     }
 
-    @ViewBuilder
-    private var rightComposerButton: some View {
-        if isLoading {
-            IconButton(systemName: "stop.fill", prominent: true, help: "Stop") { currentTask?.cancel() }
-                .keyboardShortcut(".", modifiers: .command)
-        } else if draftIsEmpty {
-            IconButton(systemName: "mic.fill", help: "Dictate") { enterVoiceMode() }
-        } else {
-            IconButton(systemName: "arrow.up", prominent: true,
-                       help: composerMode == .instruction ? "Run instruction" : "Add to chat") { sendDraft() }
-                .keyboardShortcut(.return, modifiers: .command)
+    /// The send / stop button that lives inside the input pill.
+    private func insideButton(_ icon: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 13, weight: .bold))
+                .foregroundStyle(Theme.accentInk)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Theme.accent))
         }
+        .buttonStyle(.plain)
+    }
+
+    private var composerBorder: Color {
+        (composerMode == .instruction || composerFocused)
+            ? Theme.accent.opacity(0.6) : Theme.fillTranslucent.opacity(0.08)
     }
 
     private var composerPlaceholder: String {
