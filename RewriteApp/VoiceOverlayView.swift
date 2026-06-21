@@ -9,7 +9,7 @@ struct VoiceOverlayView: View {
 
     var body: some View {
         ZStack {
-            Theme.bg
+            AmbientBackground()
 
             VStack(spacing: 0) {
                 Spacer().frame(height: 56)
@@ -39,10 +39,10 @@ struct VoiceOverlayView: View {
     /// window (cancels the parent's horizontal padding).
     private var strands: some View {
         StrandsView(
-            colors: ["#F97316", "#7C3AED", "#06B6D4"],
+            colors: ["#A7A4F5", "#8E8BF0", "#C5C2FA"],
             count: 3, speed: 0.5, amplitude: 1, waviness: 1,
-            thickness: 0.7, glow: 2.6, taper: 3, spread: 1,
-            hueShift: 0, intensity: 0.6, saturation: 2, opacity: 1, scale: 1.5,
+            thickness: 0.7, glow: 2.0, taper: 3, spread: 1,
+            hueShift: 0, intensity: 0.5, saturation: 1.2, opacity: 1, scale: 1.5,
             level: speech.level
         )
         .frame(maxWidth: .infinity)
@@ -92,26 +92,15 @@ struct VoiceOverlayView: View {
 
     private var waveformPill: some View {
         HStack(spacing: 12) {
-            Button(action: onCancel) {
-                Image(systemName: "xmark").font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(Theme.panel))
-                    .overlay(Circle().stroke(Theme.hairline, lineWidth: 1))
-            }.buttonStyle(.plain).help("Cancel")
+            IconButton(systemName: "xmark", size: 38, help: "Cancel") { onCancel() }
 
             waveform.frame(maxWidth: .infinity)
 
-            Button(action: onDone) {
-                Image(systemName: "checkmark").font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Theme.accentInk)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(Theme.accent))
-            }.buttonStyle(.plain).help("Use this text")
+            IconButton(systemName: "checkmark", size: 38, prominent: true, help: "Use this text") { onDone() }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(Capsule().fill(Theme.surface))
-        .overlay(Capsule().stroke(Theme.hairline, lineWidth: 1))
+        .background(Capsule().fill(.ultraThinMaterial))
+        .overlay(Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1))
     }
 
     private var waveform: some View {

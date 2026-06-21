@@ -8,7 +8,7 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                SectionLabel(text: "SETTINGS")
+                SectionLabel(text: "Settings")
 
                 providerSection
                 ConnectionRow()
@@ -30,7 +30,7 @@ struct SettingsView: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(Theme.bg)
+        .ambientBackground()
     }
 
     // MARK: helpers
@@ -40,12 +40,12 @@ struct SettingsView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
     private func fieldLabel(_ s: String) -> some View {
-        Text(s).font(.monoLabel(10)).tracking(1.4).foregroundStyle(Theme.textSecondary)
+        Text(s).font(.system(size: 11, weight: .semibold)).tracking(0.3).foregroundStyle(Theme.textSecondary)
     }
 
     private var providerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(text: "LLM PROVIDER")
+            SectionLabel(text: "Provider")
             Picker("", selection: $settings.provider) {
                 ForEach(LLMProvider.allCases) { Text($0.displayName).tag($0) }
             }
@@ -55,7 +55,7 @@ struct SettingsView: View {
 
     private var generalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "GENERAL")
+            SectionLabel(text: "General")
             Toggle("Launch at login", isOn: $settings.launchAtLogin)
                 .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
             Toggle("Sound when recording starts/stops", isOn: $settings.recordingSounds)
@@ -88,11 +88,11 @@ struct SettingsView: View {
 
     private var presetsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(text: "CUSTOM PRESETS")
+            SectionLabel(text: "Custom presets")
             ForEach(settings.customPresets) { preset in
                 HStack {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(preset.label.uppercased()).font(.monoLabel(11)).foregroundStyle(Theme.textPrimary)
+                        Text(preset.label).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textPrimary)
                         Text(preset.instruction).font(.system(size: 11)).foregroundStyle(Theme.textSecondary).lineLimit(1)
                     }
                     Spacer()
@@ -102,8 +102,8 @@ struct SettingsView: View {
                 }
                 .padding(10).module(Theme.panel)
             }
-            TextField("Button label (e.g. Excited)", text: $newPresetLabel).textFieldStyle(.roundedBorder)
-            TextField("Instruction (e.g. rewrite with high energy)", text: $newPresetInstruction).textFieldStyle(.roundedBorder)
+            TextField("Button label (e.g. Excited)", text: $newPresetLabel).textFieldStyle(CapsuleFieldStyle())
+            TextField("Instruction (e.g. rewrite with high energy)", text: $newPresetInstruction).textFieldStyle(CapsuleFieldStyle())
             Button { addPreset() } label: { Text("ADD PRESET") }
                 .buttonStyle(InstrumentButtonStyle())
                 .disabled(newPresetLabel.trimmingCharacters(in: .whitespaces).isEmpty
@@ -113,7 +113,7 @@ struct SettingsView: View {
 
     private var updatesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(text: "UPDATES")
+            SectionLabel(text: "Updates")
             HStack {
                 Text("VERSION \(AppUpdater.shared.currentVersion)")
                     .font(.mono(10)).tracking(1).foregroundStyle(Theme.textSecondary)
@@ -135,7 +135,7 @@ struct SettingsView: View {
 
     private var appleOnDeviceSettings: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "BUILT-IN AI · ON-DEVICE", color: Theme.textPrimary)
+            SectionLabel(text: "Built-in AI · On-device", color: Theme.textPrimary)
             desc("Powered by Apple's on-device model. No key, no account, no internet — fully private and free. Works on Apple-Silicon Macs with macOS 26 and Apple Intelligence enabled.")
             if AppleOnDeviceProvider.isAvailable {
                 HStack(spacing: 6) {
@@ -156,12 +156,12 @@ struct SettingsView: View {
 
     private var hostedSettings: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "FREE MODELS · NEWSLETTER", color: Theme.textPrimary)
+            SectionLabel(text: "Free models · Newsletter", color: Theme.textPrimary)
             desc("No API key needed. Sign in with your email to use models powered by the Rewrite gateway. Signing in adds you to the newsletter.")
             HostedSignInView()
             DisclosureGroup {
                 fieldLabel("GATEWAY URL")
-                TextField("https://…workers.dev", text: $settings.gatewayBaseURL).textFieldStyle(.roundedBorder)
+                TextField("https://…workers.dev", text: $settings.gatewayBaseURL).textFieldStyle(CapsuleFieldStyle())
             } label: {
                 Text("Advanced").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
             }
@@ -171,7 +171,7 @@ struct SettingsView: View {
 
     private var anthropicSettings: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "CLAUDE · PAID API", color: Theme.textPrimary)
+            SectionLabel(text: "Claude · Paid API", color: Theme.textPrimary)
             desc("Recommended. Fast, reliable, and the cost is tiny (a paragraph ≈ a fraction of a cent).")
             StepRow(1, "Open the Anthropic Console and sign in.") {
                 Link(destination: URL(string: "https://console.anthropic.com/settings/keys")!) {
@@ -180,7 +180,7 @@ struct SettingsView: View {
             }
             StepRow(2, "Add ~$5 credit under Billing, then create a key (starts with “sk-ant-”).")
             StepRow(3, "Paste the key below — stored only in your macOS Keychain.")
-            SecureField("sk-ant-…", text: $settings.apiKey).textFieldStyle(.roundedBorder)
+            SecureField("sk-ant-…", text: $settings.apiKey).textFieldStyle(CapsuleFieldStyle())
             fieldLabel("MODEL")
             Picker("", selection: $settings.anthropicModel) {
                 ForEach(AppSettings.anthropicModels, id: \.self) { Text($0).tag($0) }
@@ -191,7 +191,7 @@ struct SettingsView: View {
 
     private var claudeCodeSettings: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "CLAUDE CODE · SUBSCRIPTION", color: Theme.textPrimary)
+            SectionLabel(text: "Claude Code · Subscription", color: Theme.textPrimary)
             desc("Uses your Claude subscription via the claude CLI — no API key. Slower than the API.")
             StepRow(1, "Install Claude Code. Paste this into Terminal:")
             CommandRow("curl -fsSL https://claude.ai/install.sh | bash")
@@ -199,13 +199,13 @@ struct SettingsView: View {
             CommandRow("claude")
             StepRow(3, "Pick “Claude Code” above — the app finds the CLI automatically.")
             fieldLabel("PATH TO CLAUDE (OPTIONAL)")
-            TextField("/Users/you/.claude/local/claude", text: $settings.claudeCodePath).textFieldStyle(.roundedBorder)
+            TextField("/Users/you/.claude/local/claude", text: $settings.claudeCodePath).textFieldStyle(CapsuleFieldStyle())
         }
     }
 
     private var ollamaSettings: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "OLLAMA · FREE / LOCAL", color: Theme.textPrimary)
+            SectionLabel(text: "Ollama · Free / Local", color: Theme.textPrimary)
             desc("Runs a model on your Mac. Free and private; no key or internet needed.")
             StepRow(1, "Install Ollama (or download from ollama.com):") {
                 Link(destination: URL(string: "https://ollama.com/download")!) {
@@ -218,9 +218,9 @@ struct SettingsView: View {
             StepRow(3, "Make sure Ollama is running:")
             CommandRow("ollama serve")
             fieldLabel("HOST")
-            TextField("http://localhost:11434", text: $settings.ollamaHost).textFieldStyle(.roundedBorder)
+            TextField("http://localhost:11434", text: $settings.ollamaHost).textFieldStyle(CapsuleFieldStyle())
             fieldLabel("MODEL")
-            TextField("llama3.2", text: $settings.ollamaModel).textFieldStyle(.roundedBorder)
+            TextField("llama3.2", text: $settings.ollamaModel).textFieldStyle(CapsuleFieldStyle())
         }
     }
 }
@@ -250,13 +250,13 @@ private struct HostedSignInView: View {
             } else {
                 switch stage {
                 case .email:
-                    TextField("you@example.com", text: $email).textFieldStyle(.roundedBorder)
+                    TextField("you@example.com", text: $email).textFieldStyle(CapsuleFieldStyle())
                     Button { start() } label: { Text(busy ? "SENDING…" : "SEND CODE") }
                         .buttonStyle(InstrumentButtonStyle(prominent: true))
                         .disabled(busy || !email.contains("@"))
                 case .code:
                     desc("We emailed a 6-digit code to \(email).")
-                    TextField("123456", text: $code).textFieldStyle(.roundedBorder)
+                    TextField("123456", text: $code).textFieldStyle(CapsuleFieldStyle())
                     HStack {
                         Button { verify() } label: { Text(busy ? "VERIFYING…" : "VERIFY") }
                             .buttonStyle(InstrumentButtonStyle(prominent: true))
@@ -397,7 +397,7 @@ private struct CommandRow: View {
     init(_ command: String) { self.command = command }
     var body: some View {
         HStack(spacing: 8) {
-            Text(command).font(.mono(11)).foregroundStyle(Theme.textPrimary)
+            Text(command).font(.system(size: 11, design: .monospaced)).foregroundStyle(Theme.textPrimary)
                 .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
             Button {
                 NSPasteboard.general.clearContents()

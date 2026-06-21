@@ -47,10 +47,6 @@ struct PopoverView: View {
                 VStack(spacing: 0) {
                     specBar
                     HairlineDivider()
-                    if panel == .main {
-                        modeSwitcher
-                        HairlineDivider()
-                    }
                     Group {
                         switch panel {
                         case .main:     chatPanel
@@ -62,74 +58,54 @@ struct PopoverView: View {
             }
         }
         .frame(width: 380, height: 668)
-        .background(Theme.bg)
+        .ambientBackground()
         .onAppear { autoFillFromClipboard() }
     }
 
-    // MARK: - Spec bar
+    // MARK: - Header
 
+    /// Compact one-row header: History (left) · mode pill (center) · Settings (right).
     private var specBar: some View {
-        HStack(spacing: 10) {
-            Text("REWRITE").font(.display(16)).tracking(2).foregroundStyle(Theme.textPrimary)
-            Spacer()
-            if panel == .main {
-                headerButton(icon: "square.and.pencil", help: "New chat",
-                             disabled: thread.isEmpty && draft.isEmpty) { newChat() }
-            }
-            headerButton(icon: "clock.arrow.circlepath", help: "History",
-                         active: panel == .history) {
+        HStack(spacing: 8) {
+            IconButton(systemName: "clock.arrow.circlepath", active: panel == .history, help: "History") {
                 panel = (panel == .history) ? .main : .history
             }
-            headerButton(icon: panel == .settings ? "chevron.left" : "gearshape",
-                         help: "Settings", active: panel == .settings) {
+            Spacer(minLength: 6)
+            if panel == .main {
+                modePill
+            } else {
+                Text(panel == .settings ? "Settings" : "History")
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+            }
+            Spacer(minLength: 6)
+            IconButton(systemName: panel == .settings ? "chevron.left" : "gearshape",
+                       active: panel == .settings, help: "Settings") {
                 panel = (panel == .settings) ? .main : .settings
             }
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.horizontal, 14).padding(.vertical, 11)
     }
 
-    /// A prominent, boxed header control — primary-colored icon in a panel,
-    /// filled with the accent when its panel is active.
-    private func headerButton(icon: String, help: String, active: Bool = false,
-                              disabled: Bool = false, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(active ? Theme.accentInk : Theme.textPrimary)
-                .frame(width: 32, height: 32)
-                .background(RoundedRectangle(cornerRadius: Metric.buttonRadius)
-                    .fill(active ? Theme.accent : Theme.panel))
-                .overlay(RoundedRectangle(cornerRadius: Metric.buttonRadius)
-                    .stroke(active ? Theme.accent : Theme.hairline, lineWidth: 1))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .opacity(disabled ? 0.4 : 1)
-        .help(help)
-    }
-
-    // MARK: - Mode switcher
-
-    private var modeSwitcher: some View {
+    /// Soft segmented WRITING / PROMPT pill.
+    private var modePill: some View {
         HStack(spacing: 0) {
             ForEach(RewriteMode.allCases) { m in
                 let active = settings.mode == m
-                Button { settings.mode = m } label: {
-                    Text(m.title)
-                        .font(.monoLabel(11)).tracking(2)
-                        .foregroundStyle(active ? Theme.accentInk : Theme.textSecondary)
-                        .frame(maxWidth: .infinity).padding(.vertical, 8)
-                        .background(active ? Theme.accent : Color.clear)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                Text(m.title.capitalized)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(active ? Theme.accentInk : Theme.textSecondary)
+                    .frame(maxWidth: .infinity).padding(.vertical, 6)
+                    .background {
+                        if active { Capsule().fill(Theme.accent) }
+                    }
+                    .contentShape(Capsule())
+                    .onTapGesture { withAnimation(.easeInOut(duration: 0.18)) { settings.mode = m } }
             }
         }
-        .background(Theme.surface)
-        .overlay(RoundedRectangle(cornerRadius: Metric.radius).stroke(Theme.hairline, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: Metric.radius))
-        .padding(.horizontal, 16).padding(.vertical, 10)
+        .padding(3)
+        .background(Capsule().fill(Theme.fillTranslucent.opacity(0.06)))
+        .overlay(Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1))
+        .frame(width: 200)
     }
 
     // MARK: - Chat panel
@@ -180,14 +156,13 @@ struct PopoverView: View {
     private func userBubble(_ turn: ChatTurn) -> some View {
         VStack(alignment: .trailing, spacing: 4) {
             if turn.fromClipboard {
-                Text("FROM CLIPBOARD").font(.monoLabel(9)).tracking(1).foregroundStyle(Theme.textSecondary)
+                Text("From clipboard").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
             }
             Text(turn.text)
                 .font(.system(size: 13.5)).foregroundStyle(Theme.textPrimary)
                 .textSelection(.enabled)
-                .padding(.horizontal, 13).padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Theme.panel))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.hairline, lineWidth: 1))
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous).fill(Theme.panel))
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.leading, 36)
@@ -197,7 +172,7 @@ struct PopoverView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Circle().fill(turn.isError ? Theme.ledFail : Theme.accent).frame(width: 6, height: 6)
-                Text(turn.actionLabel.uppercased()).font(.monoLabel(9)).tracking(1.5)
+                Text(turn.actionLabel).font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(turn.isError ? Theme.ledFail : Theme.accent)
                     .lineLimit(1)
             }
@@ -205,10 +180,14 @@ struct PopoverView: View {
                 .font(.system(size: 13.5))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
-                .padding(.horizontal, 13).padding(.vertical, 11)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Theme.surface))
-                .overlay(RoundedRectangle(cornerRadius: 16)
-                    .stroke(turn.isStreaming ? Theme.accent : Theme.hairline, lineWidth: 1))
+                .padding(.horizontal, 14).padding(.vertical, 11)
+                .background(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous).fill(Theme.surface))
+                .overlay {
+                    if turn.isStreaming {
+                        RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous)
+                            .stroke(Theme.accent.opacity(0.5), lineWidth: 1)
+                    }
+                }
             if !turn.isStreaming && !turn.isError {
                 assistantActions(turn)
             }
@@ -262,12 +241,12 @@ struct PopoverView: View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: icon).font(.system(size: 10))
-                Text(label).font(.monoLabel(10)).tracking(0.5)
+                Text(label).font(.system(size: 11, weight: .medium))
             }
             .foregroundStyle(Theme.textSecondary)
-            .padding(.horizontal, 9).padding(.vertical, 5)
-            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Theme.hairline, lineWidth: 1))
-            .contentShape(Rectangle())
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Capsule().fill(Theme.fillTranslucent.opacity(0.06)))
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -276,8 +255,8 @@ struct PopoverView: View {
 
     private var chipsRow: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(thread.contains { $0.role == .assistant } ? "TRY ANOTHER" : "REWRITE AS")
-                .font(.monoLabel(9)).tracking(1.5).foregroundStyle(Theme.textSecondary)
+            Text(thread.contains { $0.role == .assistant } ? "Try another" : "Rewrite as")
+                .font(.system(size: 12, weight: .semibold)).tracking(0.3).foregroundStyle(Theme.textSecondary)
             FlowLayout(spacing: 7) {
                 ForEach(Array(settings.mode.actions.enumerated()), id: \.element.id) { idx, action in
                     actionChip(icon: action.systemImage, label: action.label) {
@@ -308,9 +287,11 @@ struct PopoverView: View {
                 Text(label).font(.system(size: 12.5))
                     .foregroundStyle(prominent ? Theme.accentInk : Theme.textPrimary)
             }
-            .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(Capsule().fill(prominent ? Theme.accent : Theme.panel))
-            .overlay(Capsule().stroke(prominent ? Theme.accent : Theme.hairline, lineWidth: 1))
+            .padding(.horizontal, 13).padding(.vertical, 8)
+            .background(Capsule().fill(prominent ? Theme.accent : Theme.fillTranslucent.opacity(0.06)))
+            .overlay {
+                if !prominent { Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1) }
+            }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -323,21 +304,20 @@ struct PopoverView: View {
         return KeyEquivalent(Character("\(index + 1)"))
     }
 
-    // MARK: - Composer
+    // MARK: - Composer (Siri bottom bar: + · glass field · mic/send)
 
     private var composer: some View {
-        VStack(spacing: 0) {
-            HairlineDivider()
-            VStack(spacing: 7) {
-                HStack(alignment: .bottom, spacing: 8) {
-                    composerField
-                    micButton
-                    sendButton
+        VStack(spacing: 7) {
+            HStack(alignment: .center, spacing: 8) {
+                IconButton(systemName: "plus", disabled: thread.isEmpty && draft.isEmpty, help: "New chat") {
+                    newChat()
                 }
-                composerHint
+                composerField
+                rightComposerButton
             }
-            .padding(.horizontal, 12).padding(.vertical, 10)
+            composerHint
         }
+        .padding(.horizontal, 12).padding(.vertical, 12)
     }
 
     private var composerField: some View {
@@ -345,18 +325,34 @@ struct PopoverView: View {
             if draft.isEmpty {
                 Text(composerPlaceholder)
                     .font(.system(size: 13.5)).foregroundStyle(Theme.textSecondary)
-                    .padding(.horizontal, 8).padding(.vertical, 11).allowsHitTesting(false)
+                    .padding(.horizontal, 14).padding(.vertical, 11).allowsHitTesting(false)
             }
             AutoScrollTextEditor(text: $draft, isFocused: $composerFocused,
                                  font: .systemFont(ofSize: 13.5), textColor: Theme.nsTextPrimary,
                                  autoScroll: false, autoFocus: true)
-                .frame(height: 44)
+                .frame(height: 40)
+                .padding(.horizontal, 6)
         }
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(
-            composerMode == .instruction ? Theme.accent : (composerFocused ? Theme.accent : Theme.hairline),
+        .background(Capsule().fill(.ultraThinMaterial))
+        .overlay(Capsule().stroke(
+            (composerMode == .instruction || composerFocused)
+                ? Theme.accent.opacity(0.6) : Theme.fillTranslucent.opacity(0.08),
             lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private var rightComposerButton: some View {
+        if isLoading {
+            IconButton(systemName: "stop.fill", prominent: true, help: "Stop") { currentTask?.cancel() }
+                .keyboardShortcut(".", modifiers: .command)
+        } else if draftIsEmpty {
+            IconButton(systemName: "mic.fill", help: "Dictate") { enterVoiceMode() }
+        } else {
+            IconButton(systemName: "arrow.up", prominent: true,
+                       help: composerMode == .instruction ? "Run instruction" : "Add to chat") { sendDraft() }
+                .keyboardShortcut(.return, modifiers: .command)
+        }
     }
 
     private var composerPlaceholder: String {
@@ -364,43 +360,20 @@ struct PopoverView: View {
         return thread.isEmpty ? settings.mode.inputPlaceholder : "Add text or a reply…"
     }
 
-    private var micButton: some View {
-        Button { enterVoiceMode() } label: {
-            Image(systemName: "mic.fill").font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(Theme.surface))
-                .overlay(Circle().stroke(Theme.hairline, lineWidth: 1))
-        }
-        .buttonStyle(.plain).help("Dictate")
-    }
-
-    private var sendButton: some View {
-        Button { isLoading ? currentTask?.cancel() : sendDraft() } label: {
-            Image(systemName: isLoading ? "stop.fill" : "arrow.up")
-                .font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.accentInk)
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(Theme.accent))
-        }
-        .buttonStyle(.plain)
-        .keyboardShortcut(.return, modifiers: .command)
-        .disabled(!isLoading && draftIsEmpty)
-        .opacity(!isLoading && draftIsEmpty ? 0.5 : 1)
-        .help(isLoading ? "Stop" : (composerMode == .instruction ? "Run instruction" : "Add to chat"))
-    }
-
     private var composerHint: some View {
         HStack {
             if isLoading {
-                Text("STREAMING…").font(.mono(9)).tracking(1).foregroundStyle(Theme.accent)
+                Text("Streaming…").font(.system(size: 11)).foregroundStyle(Theme.accent)
             } else if composerMode == .instruction {
-                Text("CUSTOM INSTRUCTION").font(.mono(9)).tracking(1).foregroundStyle(Theme.accent)
+                Text("Custom instruction").font(.system(size: 11)).foregroundStyle(Theme.accent)
             } else {
-                Text("\(wordCount(draft)) WORDS").font(.mono(9)).tracking(1).foregroundStyle(Theme.textSecondary)
+                Text("\(wordCount(draft)) words").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
             }
             Spacer()
-            Text(canAct ? "⌘1–\(min(settings.mode.actions.count, 9)) ACTIONS" : "⌘↩ SEND")
-                .font(.mono(9)).tracking(1).foregroundStyle(Theme.textSecondary)
+            Text(canAct ? "⌘1–\(min(settings.mode.actions.count, 9)) actions" : "⌘↩ send")
+                .font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
         }
+        .padding(.horizontal, 6)
     }
 
     // MARK: - History panel
@@ -408,10 +381,10 @@ struct PopoverView: View {
     private var historyPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                SectionLabel(text: "RECENT REWRITES")
+                SectionLabel(text: "Recent rewrites")
                 Spacer()
                 if !settings.history.isEmpty {
-                    Button { settings.history = [] } label: { Text("CLEAR") }
+                    Button { settings.history = [] } label: { Text("Clear") }
                         .buttonStyle(InstrumentButtonStyle()).controlSize(.mini)
                 }
             }
@@ -421,22 +394,23 @@ struct PopoverView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    VStack(spacing: 6) {
+                    VStack(spacing: 8) {
                         ForEach(settings.history) { item in
                             Button { openHistory(item) } label: {
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text(item.actionLabel.uppercased())
-                                        .font(.monoLabel(9)).tracking(1).foregroundStyle(Theme.accent)
+                                    Text(item.actionLabel)
+                                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.accent)
                                     Text(item.output).font(.system(size: 12)).foregroundStyle(Theme.textPrimary)
                                         .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
                                 }
-                                .padding(10)
+                                .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .module(Theme.panel)
                             }
                             .buttonStyle(.plain)
                         }
                     }
+                    .padding(.vertical, 2)
                 }
             }
         }
