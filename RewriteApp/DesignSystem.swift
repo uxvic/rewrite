@@ -24,85 +24,163 @@ extension NSColor {
     }
 }
 
-/// "Industrial Instrument" design tokens — acid accent, graphite (dark) / concrete (light).
+/// "Apple Intelligence" design tokens — soft, near-black surfaces, a muted
+/// lavender accent, translucent fills. Dark is the showcase; light is supported.
 enum Theme {
-    static let bg        = Color(nsColor: .dynamic(light: "#E9EAE6", dark: "#0E0F11"))
-    static let surface   = Color(nsColor: .dynamic(light: "#F4F4F1", dark: "#16181B"))
-    static let panel     = Color(nsColor: .dynamic(light: "#FFFFFF", dark: "#1C1F23"))
-    static let hairline  = Color(nsColor: .dynamic(light: "#D4D5CF", dark: "#2C3035"))
-    static let textPrimary   = Color(nsColor: .dynamic(light: "#15171A", dark: "#F3F5F6"))
-    static let textSecondary = Color(nsColor: .dynamic(light: "#6A6E72", dark: "#878D94"))
-    static let nsTextPrimary = NSColor.dynamic(light: "#15171A", dark: "#F3F5F6")
+    static let bg            = Color(nsColor: .dynamic(light: "#F2F2F7", dark: "#0B0B0F"))
+    /// Lighter top stop for the ambient radial-gradient background.
+    static let bgGradientTop = Color(nsColor: .dynamic(light: "#FFFFFF", dark: "#1A1820"))
+    static let surface   = Color(nsColor: .dynamic(light: "#FFFFFF", dark: "#17171C"))
+    static let panel     = Color(nsColor: .dynamic(light: "#FFFFFF", dark: "#1E1E25"))
+    static let hairline  = Color(nsColor: .dynamic(light: "#E2E2EA", dark: "#2A2A33"))
+    static let textPrimary   = Color(nsColor: .dynamic(light: "#1A1A1F", dark: "#F2F3F7"))
+    static let textSecondary = Color(nsColor: .dynamic(light: "#6E6E78", dark: "#9A9AA6"))
+    static let nsTextPrimary = NSColor.dynamic(light: "#1A1A1F", dark: "#F2F3F7")
 
-    static let accent    = Color(nsColor: NSColor(hex: "#CBFF2E"))
-    static let accentInk  = Color(nsColor: NSColor(hex: "#0E0F0E"))
-    static let ledFail   = Color(nsColor: NSColor(hex: "#FF4D3D"))
+    /// Muted lavender / periwinkle accent, used sparingly.
+    static let accent    = Color(nsColor: .dynamic(light: "#7C78E8", dark: "#A7A4F5"))
+    /// Ink that sits on top of an accent-filled element (white on lavender).
+    static let accentInk = Color(nsColor: NSColor(hex: "#FFFFFF"))
+    static let ledFail   = Color(nsColor: .dynamic(light: "#E5483B", dark: "#FF6B5E"))
+
+    /// White in dark mode, black in light mode. Apply at a low opacity so the
+    /// translucent button/icon fills invert correctly between appearances.
+    static let fillTranslucent = Color(nsColor: .dynamic(light: "#000000", dark: "#FFFFFF"))
 }
 
 enum Metric {
-    static let radius: CGFloat = 4
-    static let buttonRadius: CGFloat = 6
+    static let radius: CGFloat = 18
+    static let buttonRadius: CGFloat = 12
+    static let cardRadius: CGFloat = 16
+    static let bubbleRadius: CGFloat = 20
+    static let field: CGFloat = 14
     static let window: CGFloat = 12
 }
 
-// MARK: - Fonts
+// MARK: - Fonts (SF Pro)
 
 extension Font {
-    static func monoLabel(_ size: CGFloat = 10) -> Font { .system(size: size, weight: .semibold, design: .monospaced) }
-    static func mono(_ size: CGFloat = 11) -> Font { .system(size: size, design: .monospaced) }
-    static func display(_ size: CGFloat = 16) -> Font { .system(size: size, weight: .heavy, design: .monospaced) }
+    static func monoLabel(_ size: CGFloat = 12) -> Font { .system(size: size, weight: .semibold) }
+    static func mono(_ size: CGFloat = 13) -> Font { .system(size: size, weight: .regular) }
+    static func display(_ size: CGFloat = 17) -> Font { .system(size: size, weight: .bold) }
 }
 
 // MARK: - Components
 
-/// Mono uppercase tracked section label (e.g. INPUT / ACTIONS / OUTPUT).
+/// A soft section header (SF Pro, light tracking).
 struct SectionLabel: View {
     let text: String
     var color: Color = Theme.textSecondary
     var body: some View {
-        Text(text).font(.monoLabel(10)).tracking(1.6).foregroundStyle(color)
+        Text(text).font(.system(size: 12, weight: .semibold)).tracking(0.3).foregroundStyle(color)
     }
 }
 
 struct HairlineDivider: View {
-    var body: some View { Rectangle().fill(Theme.hairline).frame(height: 1) }
+    var body: some View { Rectangle().fill(Theme.hairline.opacity(0.5)).frame(height: 1) }
 }
 
 /// Small bordered keycap, e.g. ⌘1.
 struct Keycap: View {
     let text: String
     var body: some View {
-        Text(text).font(.mono(9)).foregroundStyle(Theme.textSecondary)
+        Text(text).font(.system(size: 10, weight: .medium)).foregroundStyle(Theme.textSecondary)
             .padding(.horizontal, 5).padding(.vertical, 1)
-            .overlay(RoundedRectangle(cornerRadius: 3).stroke(Theme.hairline, lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).stroke(Theme.hairline, lineWidth: 1))
     }
 }
 
+/// Soft status dot with a gentle glow.
 struct LEDDot: View {
     var color: Color = Theme.accent
-    var body: some View { Circle().fill(color).frame(width: 7, height: 7) }
+    var body: some View {
+        Circle().fill(color).frame(width: 7, height: 7)
+            .shadow(color: color.opacity(0.6), radius: 3)
+    }
 }
 
-/// Instrument button: prominent = acid fill; otherwise hairline outline.
+/// Soft capsule button: prominent = accent fill + white ink; otherwise a subtle
+/// translucent fill with a faint border.
 struct InstrumentButtonStyle: ButtonStyle {
     var prominent = false
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.monoLabel(11)).tracking(1)
+            .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(prominent ? Theme.accentInk : Theme.textPrimary)
-            .padding(.vertical, 8).padding(.horizontal, 12)
-            .background(RoundedRectangle(cornerRadius: Metric.radius).fill(prominent ? Theme.accent : Color.clear))
-            .overlay(prominent ? nil : RoundedRectangle(cornerRadius: Metric.radius).stroke(Theme.hairline, lineWidth: 1))
+            .padding(.vertical, 8).padding(.horizontal, 16)
+            .background(Capsule().fill(prominent ? Theme.accent : Theme.fillTranslucent.opacity(0.06)))
+            .overlay {
+                if !prominent { Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1) }
+            }
             .opacity(configuration.isPressed ? 0.7 : 1)
-            .contentShape(Rectangle())
+            .contentShape(Capsule())
+    }
+}
+
+/// Circular, translucent icon button — the Siri X / mic / + style.
+struct IconButton: View {
+    let systemName: String
+    var size: CGFloat = 34
+    /// Accent-filled (e.g. send / confirm).
+    var prominent: Bool = false
+    /// Soft accent tint (e.g. an active panel).
+    var active: Bool = false
+    var disabled: Bool = false
+    var help: String = ""
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: size * 0.42, weight: .semibold))
+                .foregroundStyle(prominent ? Theme.accentInk : (active ? Theme.accent : Theme.textPrimary))
+                .frame(width: size, height: size)
+                .background(Circle().fill(
+                    prominent ? Theme.accent : Theme.fillTranslucent.opacity(active ? 0.16 : 0.08)))
+                .overlay {
+                    if !prominent {
+                        Circle().stroke(Theme.fillTranslucent.opacity(0.06), lineWidth: 1)
+                    }
+                }
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.4 : 1)
+        .help(help)
+    }
+}
+
+/// Near-black ambient background with a subtle radial lift toward the top.
+struct AmbientBackground: View {
+    var body: some View {
+        RadialGradient(gradient: Gradient(colors: [Theme.bgGradientTop, Theme.bg]),
+                       center: .top, startRadius: 0, endRadius: 540)
+            .ignoresSafeArea()
+    }
+}
+
+/// A glass / vibrant text-field pill ("Ask Siri" style).
+struct CapsuleFieldStyle: TextFieldStyle {
+    func _body(configuration: TextField<Self._Label>) -> some View {
+        configuration
+            .textFieldStyle(.plain)
+            .font(.system(size: 13))
+            .padding(.horizontal, 14).padding(.vertical, 9)
+            .background(Capsule().fill(.ultraThinMaterial))
+            .overlay(Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1))
     }
 }
 
 extension View {
-    /// A bordered "module" surface (panel fill + hairline border).
+    /// A soft, translucent "card" surface (rounded fill + faint border + shadow).
     func module(_ fillColor: Color = Theme.surface, focused: Bool = false) -> some View {
-        background(RoundedRectangle(cornerRadius: Metric.radius).fill(fillColor))
-            .overlay(RoundedRectangle(cornerRadius: Metric.radius)
-                .stroke(focused ? Theme.accent : Theme.hairline, lineWidth: 1))
+        background(RoundedRectangle(cornerRadius: Metric.cardRadius, style: .continuous).fill(fillColor))
+            .overlay(RoundedRectangle(cornerRadius: Metric.cardRadius, style: .continuous)
+                .stroke(focused ? Theme.accent.opacity(0.6) : Theme.fillTranslucent.opacity(0.06), lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.18), radius: 8, y: 2)
     }
+
+    /// Near-black ambient radial background.
+    func ambientBackground() -> some View { background(AmbientBackground()) }
 }

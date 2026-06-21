@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Full-popover voice-capture takeover: a reactive acid orb, live transcript,
-/// and an amplitude-driven waveform. Reuses the app's design tokens.
+/// Full-popover voice-capture takeover: reactive flowing strands, live
+/// transcript, and an amplitude-driven waveform. Reuses the app's design tokens.
 struct VoiceOverlayView: View {
     @ObservedObject var speech: SpeechManager
     var onDone: () -> Void
@@ -9,11 +9,11 @@ struct VoiceOverlayView: View {
 
     var body: some View {
         ZStack {
-            Theme.bg
+            AmbientBackground()
 
             VStack(spacing: 0) {
                 Spacer().frame(height: 56)
-                orb
+                strands
                 Spacer()
                 transcript
                 Spacer()
@@ -31,41 +31,23 @@ struct VoiceOverlayView: View {
         .onDisappear { speech.stop() }   // safety: never leave the mic running
     }
 
-    // MARK: Orb
+    // MARK: Strands
 
-    private var orb: some View {
-        TimelineView(.animation) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            let lvl = CGFloat(min(max(speech.level, 0), 1))
-            let breath = CGFloat(sin(t * 1.6)) * 0.03
-            ZStack {
-                Circle()
-                    .fill(Theme.accent)
-                    .frame(width: 210, height: 210)
-                    .blur(radius: 38 + lvl * 55)
-                    .opacity(0.16 + Double(lvl) * 0.5)
-                Circle()
-                    .fill(RadialGradient(
-                        colors: [
-                            Color(nsColor: NSColor(hex: "#F2FFC2")),
-                            Color(nsColor: NSColor(hex: "#CBFF2E")),
-                            Color(nsColor: NSColor(hex: "#5C7A12")),
-                            Color(nsColor: NSColor(hex: "#10130A"))
-                        ],
-                        center: UnitPoint(x: 0.36, y: 0.3),
-                        startRadius: 3, endRadius: 135))
-                    .frame(width: 184, height: 184)
-                    .overlay(
-                        Ellipse().fill(Color.white.opacity(0.22))
-                            .frame(width: 96, height: 42).blur(radius: 14)
-                            .offset(x: -18, y: -46).rotationEffect(.degrees(-18))
-                    )
-                    .overlay(Circle().stroke(Theme.accent.opacity(0.35), lineWidth: 1))
-                    .shadow(color: Theme.accent.opacity(0.3 + Double(lvl) * 0.4), radius: 20 + lvl * 30)
-            }
-            .scaleEffect(1 + breath + lvl * 0.24)
-        }
-        .frame(width: 220, height: 220)
+    /// Flowing, glowing strands that swell while the user talks. The web view is
+    /// transparent and the strands fade out at the edges, so they blend straight
+    /// into the overlay background — no card, no border. Full-bleed across the
+    /// window (cancels the parent's horizontal padding).
+    private var strands: some View {
+        StrandsView(
+            colors: ["#A7A4F5", "#8E8BF0", "#C5C2FA"],
+            count: 3, speed: 0.5, amplitude: 1, waviness: 1,
+            thickness: 0.7, glow: 2.0, taper: 3, spread: 1,
+            hueShift: 0, intensity: 0.5, saturation: 1.2, opacity: 1, scale: 1.5,
+            level: speech.level
+        )
+        .frame(maxWidth: .infinity)
+        .frame(height: 240)
+        .padding(.horizontal, -24)
     }
 
     // MARK: Transcript
@@ -110,26 +92,15 @@ struct VoiceOverlayView: View {
 
     private var waveformPill: some View {
         HStack(spacing: 12) {
-            Button(action: onCancel) {
-                Image(systemName: "xmark").font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(Theme.panel))
-                    .overlay(Circle().stroke(Theme.hairline, lineWidth: 1))
-            }.buttonStyle(.plain).help("Cancel")
+            IconButton(systemName: "xmark", size: 38, help: "Cancel") { onCancel() }
 
             waveform.frame(maxWidth: .infinity)
 
-            Button(action: onDone) {
-                Image(systemName: "checkmark").font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Theme.accentInk)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(Theme.accent))
-            }.buttonStyle(.plain).help("Use this text")
+            IconButton(systemName: "checkmark", size: 38, prominent: true, help: "Use this text") { onDone() }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(Capsule().fill(Theme.surface))
-        .overlay(Capsule().stroke(Theme.hairline, lineWidth: 1))
+        .background(Capsule().fill(.ultraThinMaterial))
+        .overlay(Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1))
     }
 
     private var waveform: some View {

@@ -12,7 +12,7 @@ struct WelcomeView: View {
             HStack(spacing: 12) {
                 Image(systemName: "wand.and.stars").font(.system(size: 24)).foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("REWRITE").font(.display(22)).tracking(2).foregroundStyle(Theme.textPrimary)
+                    Text("Rewrite").font(.display(22)).tracking(0.5).foregroundStyle(Theme.textPrimary)
                     Text("A private writing assistant in your menu bar.")
                         .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 }
@@ -26,7 +26,7 @@ struct WelcomeView: View {
             infoRow("bolt.fill", engineTitle, engineSubtitle)
 
             HairlineDivider()
-            SectionLabel(text: "PERMISSIONS · OPTIONAL")
+            SectionLabel(text: "Permissions · Optional")
             permissionRow("Accessibility",
                           "Lets ⌥⇧Space rewrite selected text anywhere.",
                           granted: Permissions.accessibilityGranted()) {
@@ -40,16 +40,16 @@ struct WelcomeView: View {
 
             Spacer(minLength: 0)
             HStack {
-                Button { tick.toggle() } label: { Text("REFRESH STATUS") }
+                Button { tick.toggle() } label: { Text("Refresh status") }
                     .buttonStyle(InstrumentButtonStyle()).controlSize(.small)
                 Spacer()
-                Button { onClose() } label: { Text("GET STARTED") }
+                Button { onClose() } label: { Text("Get started") }
                     .buttonStyle(InstrumentButtonStyle(prominent: true))
             }
         }
         .padding(24)
         .frame(width: 460, height: 560)
-        .background(Theme.bg)
+        .ambientBackground()
         .id(tick)
     }
 
@@ -83,9 +83,9 @@ struct WelcomeView: View {
             }
             Spacer()
             if granted {
-                Text("GRANTED").font(.mono(9)).tracking(1).foregroundStyle(Theme.accent)
+                Text("Granted").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.accent)
             } else {
-                Button { action() } label: { Text("ENABLE") }
+                Button { action() } label: { Text("Enable") }
                     .buttonStyle(InstrumentButtonStyle()).controlSize(.small)
             }
         }
