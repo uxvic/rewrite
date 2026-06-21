@@ -233,18 +233,24 @@ struct PopoverView: View {
                     .foregroundStyle(turn.isError ? Theme.ledFail : Theme.accent)
                     .lineLimit(1)
             }
-            bodyText(turn)
-                .font(.system(size: 13.5))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
-                .padding(.horizontal, 14).padding(.vertical, 11)
-                .background(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous).fill(Theme.surface))
-                .overlay {
-                    if turn.isStreaming {
-                        RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous)
-                            .stroke(Theme.accent.opacity(0.5), lineWidth: 1)
+            if turn.isStreaming && turn.text.isEmpty {
+                TypingDots()
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous).fill(Theme.surface))
+            } else {
+                bodyText(turn)
+                    .font(.system(size: 13.5))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 14).padding(.vertical, 11)
+                    .background(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous).fill(Theme.surface))
+                    .overlay {
+                        if turn.isStreaming {
+                            RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous)
+                                .stroke(Theme.accent.opacity(0.5), lineWidth: 1)
+                        }
                     }
-                }
+            }
             if !turn.isStreaming && !turn.isError {
                 assistantActions(turn)
             }
@@ -256,8 +262,7 @@ struct PopoverView: View {
     private func bodyText(_ turn: ChatTurn) -> Text {
         if turn.isError { return Text(turn.text).foregroundColor(Theme.ledFail) }
         if turn.showingDiff { return diffText(turn) }
-        let shown = (turn.text.isEmpty && turn.isStreaming) ? "…" : turn.text
-        let base = Text(shown).foregroundColor(Theme.textPrimary)
+        let base = Text(turn.text).foregroundColor(Theme.textPrimary)
         return turn.isStreaming ? base + Text(" ▏").foregroundColor(Theme.accent) : base
     }
 
@@ -829,5 +834,27 @@ struct WhatsNewCardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .module(Theme.surface)
         .padding(.trailing, 8)
+    }
+}
+
+/// iMessage-style "typing…" indicator: three dots that bounce in a staggered loop.
+/// Shown in the assistant bubble while waiting for the first words of a response.
+struct TypingDots: View {
+    @State private var animating = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(Theme.textSecondary)
+                    .frame(width: 6, height: 6)
+                    .offset(y: animating ? -3 : 0)
+                    .opacity(animating ? 1 : 0.45)
+                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)
+                        .delay(Double(i) * 0.18), value: animating)
+            }
+        }
+        .onAppear { animating = true }
+        .accessibilityLabel("Working…")
     }
 }
