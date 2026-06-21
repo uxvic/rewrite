@@ -1,31 +1,43 @@
 import SwiftUI
+import AppKit
+
+/// One message in the rewrite conversation. User turns hold the source text;
+/// assistant turns hold a rewrite (streamed in) plus the action that produced it.
+struct ChatTurn: Identifiable, Equatable {
+    enum Role { case user, assistant }
+    let id = UUID()
+    var role: Role
+    var text: String
+    var actionLabel: String = ""
+    var systemPrompt: String = ""
+    var isStreaming: Bool = false
+    var isError: Bool = false
+    var showingDiff: Bool = false
+    var sourceText: String = ""
+    var fromClipboard: Bool = false
+}
+
+/// What the composer's text means when sent: new source text, or a one-off
+/// custom instruction to run on the latest source.
+enum ComposerMode { case text, instruction }
 
 struct PopoverView: View {
     @ObservedObject private var settings = AppSettings.shared
     @StateObject private var speech = SpeechManager()
 
-    @State private var inputText = ""
-    @State private var outputText = ""
-    @State private var customInstruction = ""
+    @State private var thread: [ChatTurn] = []
+    @State private var draft = ""
+    @State private var composerMode: ComposerMode = .text
     @State private var isLoading = false
-    @State private var errorMessage: String?
-    @State private var copied = false
-    @State private var dictationBase = ""
     @State private var currentTask: Task<Void, Never>?
-    @State private var justFinished = false
-    @State private var pulse = false
-    @State private var lastSystemPrompt: String?
-    @State private var lastLabel = ""
-    @State private var showDiff = false
+    @State private var copiedTurnID: UUID?
+    @State private var composerFocused = false
+    @State private var voiceMode = false
     @State private var fromClipboard = false
     @State private var lastClipboardCount = -1
-    @State private var diffInput = ""
-    @State private var voiceMode = false
 
     private enum Panel { case main, settings, history }
     @State private var panel: Panel = .main
-
-    @State private var inputFocused = false
 
     var body: some View {
         Group {
@@ -41,7 +53,7 @@ struct PopoverView: View {
                     }
                     Group {
                         switch panel {
-                        case .main:     mainContent
+                        case .main:     chatPanel
                         case .settings: SettingsView()
                         case .history:  historyPanel
                         }
@@ -51,23 +63,7 @@ struct PopoverView: View {
         }
         .frame(width: 380, height: 668)
         .background(Theme.bg)
-        .onAppear {
-            autoFillFromClipboard()
-        }
-        .onChange(of: settings.mode) { _, _ in showDiff = false }
-        .onChange(of: speech.transcript) { _, newValue in
-            guard speech.isRecording, !voiceMode else { return }
-            let separator = dictationBase.isEmpty ? "" : " "
-            inputText = dictationBase + separator + newValue
-        }
-        .onChange(of: speech.isRecording) { _, recording in
-            if recording {
-                pulse = false
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true }
-            } else {
-                withAnimation(.default) { pulse = false }
-            }
-        }
+        .onAppear { autoFillFromClipboard() }
     }
 
     // MARK: - Spec bar
@@ -79,6 +75,13 @@ struct PopoverView: View {
             Spacer()
             LEDDot(color: Theme.accent)
             Text(providerShortName.uppercased()).font(.mono(10)).tracking(2).foregroundStyle(Theme.textSecondary)
+            if panel == .main {
+                Button { newChat() } label: {
+                    Image(systemName: "square.and.pencil").foregroundStyle(Theme.textSecondary)
+                }
+                .buttonStyle(.borderless).help("New chat")
+                .disabled(thread.isEmpty && draft.isEmpty)
+            }
             Button { panel = (panel == .history) ? .main : .history } label: {
                 Image(systemName: "clock.arrow.circlepath").foregroundStyle(Theme.textSecondary)
             }.buttonStyle(.borderless).help("History")
@@ -126,249 +129,274 @@ struct PopoverView: View {
         .padding(.horizontal, 16).padding(.vertical, 10)
     }
 
-    // MARK: - Main panel
+    // MARK: - Chat panel
 
-    private var mainContent: some View {
-        VStack(spacing: 12) {
-            inputModule
-            outputModule
-            HairlineDivider()
-            actionsModule
-            customRow
-        }
-        .padding(16)
-    }
-
-    private var wordCount: Int {
-        inputText.split { $0 == " " || $0 == "\n" || $0 == "\t" }.count
-    }
-
-    private var inputModule: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                SectionLabel(text: "INPUT")
-                Spacer()
-                if speech.isRecording {
-                    HStack(spacing: 5) {
-                        Circle().fill(Theme.ledFail).frame(width: 7, height: 7).opacity(pulse ? 0.25 : 1)
-                        Text("REC").font(.mono(10)).tracking(2).foregroundStyle(Theme.ledFail)
-                    }
-                } else if fromClipboard {
-                    Button { fromClipboard = false; inputText = "" } label: {
-                        HStack(spacing: 4) {
-                            Text("FROM CLIPBOARD").font(.mono(9)).tracking(1)
-                            Image(systemName: "xmark").font(.system(size: 8))
-                        }
-                        .foregroundStyle(Theme.textSecondary)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .overlay(Capsule().stroke(Theme.hairline, lineWidth: 1))
-                    }.buttonStyle(.plain).help("Clear")
-                } else {
-                    Text("\(wordCount) WORDS").font(.mono(10)).tracking(1.5).foregroundStyle(Theme.textSecondary)
-                }
-            }
-            ZStack(alignment: .bottomTrailing) {
-                ZStack(alignment: .topLeading) {
-                    AutoScrollTextEditor(text: $inputText, isFocused: $inputFocused,
-                                         font: .systemFont(ofSize: 13), textColor: Theme.nsTextPrimary,
-                                         autoScroll: speech.isRecording, autoFocus: true)
-                        .frame(height: 78)
-                    if inputText.isEmpty {
-                        Text(settings.mode.inputPlaceholder)
-                            .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                            .padding(.horizontal, 13).padding(.vertical, 12).allowsHitTesting(false)
-                    }
-                }
-                micButton.padding(8)
-            }
-            .module(Theme.surface, focused: inputFocused || speech.isRecording)
+    private var chatPanel: some View {
+        VStack(spacing: 0) {
+            threadView
+            composer
         }
     }
 
-    private var micButton: some View {
-        Button { enterVoiceMode() } label: {
-            Image(systemName: "mic.fill")
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.accentInk)
-                .frame(width: 30, height: 30)
-                .background(Circle().fill(Theme.accent))
-        }
-        .buttonStyle(.plain)
-        .help("Voice input")
-    }
-
-    private func enterVoiceMode() {
-        dictationBase = inputText
-        if !speech.isRecording { speech.toggle() }
-        voiceMode = true
-    }
-
-    private func finishVoice() {
-        let captured = speech.transcript
-        if speech.isRecording { speech.stop() }
-        let sep = dictationBase.isEmpty ? "" : " "
-        inputText = captured.isEmpty ? dictationBase : dictationBase + sep + captured
-        voiceMode = false
-        fromClipboard = false
-    }
-
-    private func cancelVoice() {
-        if speech.isRecording { speech.stop() }
-        voiceMode = false
-    }
-
-    private var actionsModule: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            SectionLabel(text: "ACTIONS")
-            let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
-            LazyVGrid(columns: columns, spacing: 6) {
-                ForEach(Array(settings.mode.actions.enumerated()), id: \.element.id) { index, action in
-                    actionCell(index: String(format: "%02d", index + 1),
-                               icon: action.systemImage,
-                               label: action.label.uppercased(),
-                               key: index < 9 ? "⌘\(index + 1)" : nil) {
-                        run(systemPrompt: action.systemPrompt, label: action.label)
-                    }
-                    .keyboardShortcut(shortcutKey(index), modifiers: .command)
-                }
-                ForEach(settings.customPresets) { preset in
-                    actionCell(index: "★", icon: "star", label: preset.label.uppercased(), key: nil) {
-                        run(systemPrompt: RewriteAction.customSystemPrompt(preset.instruction), label: preset.label)
-                    }
-                }
-            }
-        }
-    }
-
-    private func actionCell(index: String, icon: String, label: String, key: String?, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 7) {
-                Text(index).font(.monoLabel(10)).foregroundStyle(Theme.accent)
-                Image(systemName: icon).font(.system(size: 11)).foregroundStyle(Theme.textSecondary).frame(width: 14)
-                Text(label).font(.mono(11)).foregroundStyle(Theme.textPrimary).lineLimit(1).minimumScaleFactor(0.85)
-                Spacer(minLength: 2)
-                if let key { Keycap(text: key) }
-            }
-            .padding(.vertical, 8).padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
-            .module(Theme.panel)
-        }
-        .buttonStyle(.plain)
-        .disabled(isInputEmpty || isLoading)
-        .opacity(isInputEmpty || isLoading ? 0.5 : 1)
-    }
-
-    private func shortcutKey(_ index: Int) -> KeyEquivalent {
-        guard index < 9 else { return .init("0") }
-        return KeyEquivalent(Character("\(index + 1)"))
-    }
-
-    private var customRow: some View {
-        HStack(spacing: 8) {
-            TextField(settings.mode.customHint, text: $customInstruction)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textPrimary)
-                .padding(.vertical, 9).padding(.horizontal, 10)
-                .module(Theme.surface)
-                .onSubmit(runCustom)
-            Button(action: runCustom) { Text("GO") }
-                .buttonStyle(InstrumentButtonStyle(prominent: true))
-                .disabled(customInstruction.trimmingCharacters(in: .whitespaces).isEmpty || isInputEmpty || isLoading)
-        }
-    }
-
-    private var outputModule: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                SectionLabel(text: "OUTPUT")
-                Spacer()
-                if isLoading {
-                    Text("STREAMING").font(.mono(10)).tracking(1.5).foregroundStyle(Theme.accent)
-                    Button { currentTask?.cancel() } label: { Text("STOP") }
-                        .buttonStyle(InstrumentButtonStyle())
-                        .controlSize(.mini)
-                } else {
-                    Text(errorMessage != nil ? "ERROR" : (justFinished ? "DONE" : "READY"))
-                        .font(.mono(10)).tracking(1.5)
-                        .foregroundStyle(errorMessage != nil ? Theme.ledFail : Theme.accent)
-                }
-            }
+    private var threadView: some View {
+        ScrollViewReader { proxy in
             ScrollView {
-                Group {
-                    if let errorMessage {
-                        Text(errorMessage).foregroundStyle(Theme.ledFail)
-                    } else if outputText.isEmpty {
-                        Text("Result appears here.").foregroundStyle(Theme.textSecondary)
-                    } else if showDiff {
-                        diffText
+                VStack(alignment: .leading, spacing: 14) {
+                    if thread.isEmpty {
+                        emptyState
                     } else {
-                        Text(outputText).foregroundStyle(Theme.textPrimary)
+                        ForEach(thread) { turn in turnView(turn) }
                     }
+                    if canAct { chipsRow }
+                    Color.clear.frame(height: 1).id("bottom")
                 }
-                .font(.system(size: 13))
+                .padding(16)
+            }
+            .frame(maxHeight: .infinity)
+            .onChange(of: thread) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "text.bubble").font(.system(size: 26)).foregroundStyle(Theme.textSecondary)
+            Text(settings.mode == .writing
+                 ? "Paste, type, or dictate the text you want to rework — then pick how to rewrite it."
+                 : "Paste a rough prompt — then pick how to improve it.")
+                .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity).padding(.top, 40).padding(.horizontal, 18)
+    }
+
+    @ViewBuilder
+    private func turnView(_ turn: ChatTurn) -> some View {
+        if turn.role == .user { userBubble(turn) } else { assistantTurn(turn) }
+    }
+
+    private func userBubble(_ turn: ChatTurn) -> some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            if turn.fromClipboard {
+                Text("FROM CLIPBOARD").font(.monoLabel(9)).tracking(1).foregroundStyle(Theme.textSecondary)
+            }
+            Text(turn.text)
+                .font(.system(size: 13.5)).foregroundStyle(Theme.textPrimary)
+                .textSelection(.enabled)
+                .padding(.horizontal, 13).padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 16).fill(Theme.panel))
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.hairline, lineWidth: 1))
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.leading, 36)
+    }
+
+    private func assistantTurn(_ turn: ChatTurn) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Circle().fill(turn.isError ? Theme.ledFail : Theme.accent).frame(width: 6, height: 6)
+                Text(turn.actionLabel.uppercased()).font(.monoLabel(9)).tracking(1.5)
+                    .foregroundStyle(turn.isError ? Theme.ledFail : Theme.accent)
+                    .lineLimit(1)
+            }
+            bodyText(turn)
+                .font(.system(size: 13.5))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
-                .padding(12)
-            }
-            .frame(height: 124)
-            .module(Theme.surface, focused: justFinished)
-
-            HStack(spacing: 8) {
-                Button { copyToClipboard() } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc").font(.system(size: 12))
-                        Text(copied ? "COPIED" : "COPY")
-                    }
-                }
-                .buttonStyle(InstrumentButtonStyle())
-                .disabled(outputText.isEmpty)
-                .keyboardShortcut(.return, modifiers: .command)
-
-                Button { inputText = outputText; outputText = ""; showDiff = false } label: {
-                    Image(systemName: "arrow.up").font(.system(size: 12))
-                }
-                .buttonStyle(InstrumentButtonStyle())
-                .disabled(outputText.isEmpty)
-                .help("Use as input")
-
-                Button { regenerate() } label: {
-                    Image(systemName: "arrow.clockwise").font(.system(size: 12))
-                }
-                .buttonStyle(InstrumentButtonStyle())
-                .disabled(lastSystemPrompt == nil || isLoading || isInputEmpty)
-                .help("Regenerate (a fresh variation)")
-
-                Spacer()
-
-                // RESULT | DIFF toggle
-                HStack(spacing: 0) {
-                    ForEach(["RESULT", "DIFF"], id: \.self) { opt in
-                        let on = (opt == "DIFF") == showDiff
-                        Button { showDiff = (opt == "DIFF") } label: {
-                            Text(opt).font(.mono(9)).tracking(1)
-                                .foregroundStyle(on ? Theme.accentInk : Theme.textSecondary)
-                                .padding(.horizontal, 7).padding(.vertical, 4)
-                                .background(on ? Theme.accent : Color.clear)
-                                .contentShape(Rectangle())
-                        }.buttonStyle(.plain)
-                    }
-                }
-                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.hairline, lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-                .opacity(outputText.isEmpty ? 0.4 : 1)
-                .disabled(outputText.isEmpty)
+                .padding(.horizontal, 13).padding(.vertical, 11)
+                .background(RoundedRectangle(cornerRadius: 16).fill(Theme.surface))
+                .overlay(RoundedRectangle(cornerRadius: 16)
+                    .stroke(turn.isStreaming ? Theme.accent : Theme.hairline, lineWidth: 1))
+            if !turn.isStreaming && !turn.isError {
+                assistantActions(turn)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, 24)
     }
 
-    private var diffText: Text {
-        TextDiff.words(old: diffInput, new: outputText).reduce(Text("")) { acc, seg in
+    private func bodyText(_ turn: ChatTurn) -> Text {
+        if turn.isError { return Text(turn.text).foregroundColor(Theme.ledFail) }
+        if turn.showingDiff { return diffText(turn) }
+        let shown = (turn.text.isEmpty && turn.isStreaming) ? "…" : turn.text
+        let base = Text(shown).foregroundColor(Theme.textPrimary)
+        return turn.isStreaming ? base + Text(" ▏").foregroundColor(Theme.accent) : base
+    }
+
+    private func diffText(_ turn: ChatTurn) -> Text {
+        TextDiff.words(old: turn.sourceText, new: turn.text).reduce(Text("")) { acc, seg in
             switch seg.kind {
             case .same:    return acc + Text(seg.text).foregroundColor(Theme.textPrimary)
             case .added:   return acc + Text(seg.text).foregroundColor(Theme.accent)
             case .removed: return acc + Text(seg.text).foregroundColor(Theme.ledFail).strikethrough()
             }
+        }
+    }
+
+    private func assistantActions(_ turn: ChatTurn) -> some View {
+        HStack(spacing: 6) {
+            miniButton(copiedTurnID == turn.id ? "checkmark" : "doc.on.doc",
+                       copiedTurnID == turn.id ? "Copied" : "Copy") {
+                setClipboard(turn.text)
+                copiedTurnID = turn.id
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    if copiedTurnID == turn.id { copiedTurnID = nil }
+                }
+            }
+            miniButton("arrow.up", "Use") { draft = turn.text; composerMode = .text }
+            miniButton("arrow.clockwise", "Retry") {
+                run(systemPrompt: turn.systemPrompt, label: turn.actionLabel, variation: true, source: turn.sourceText)
+            }
+            miniButton(turn.showingDiff ? "text.alignleft" : "plus.forwardslash.minus",
+                       turn.showingDiff ? "Result" : "Diff") {
+                mutateTurn(turn.id) { $0.showingDiff.toggle() }
+            }
+        }
+        .disabled(isLoading)
+        .opacity(isLoading ? 0.5 : 1)
+    }
+
+    private func miniButton(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon).font(.system(size: 10))
+                Text(label).font(.monoLabel(10)).tracking(0.5)
+            }
+            .foregroundStyle(Theme.textSecondary)
+            .padding(.horizontal, 9).padding(.vertical, 5)
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Theme.hairline, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Action chips
+
+    private var chipsRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(thread.contains { $0.role == .assistant } ? "TRY ANOTHER" : "REWRITE AS")
+                .font(.monoLabel(9)).tracking(1.5).foregroundStyle(Theme.textSecondary)
+            FlowLayout(spacing: 7) {
+                ForEach(Array(settings.mode.actions.enumerated()), id: \.element.id) { idx, action in
+                    actionChip(icon: action.systemImage, label: action.label) {
+                        run(systemPrompt: action.systemPrompt, label: action.label)
+                    }
+                    .keyboardShortcut(shortcutKey(idx), modifiers: .command)
+                }
+                ForEach(settings.customPresets) { preset in
+                    actionChip(icon: "star", label: preset.label) {
+                        run(systemPrompt: RewriteAction.customSystemPrompt(preset.instruction), label: preset.label)
+                    }
+                }
+                actionChip(icon: "wand.and.rays", label: "Custom…",
+                           prominent: composerMode == .instruction) {
+                    composerMode = .instruction
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func actionChip(icon: String, label: String, prominent: Bool = false,
+                            _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 11))
+                    .foregroundStyle(prominent ? Theme.accentInk : Theme.textSecondary)
+                Text(label).font(.system(size: 12.5))
+                    .foregroundStyle(prominent ? Theme.accentInk : Theme.textPrimary)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(Capsule().fill(prominent ? Theme.accent : Theme.panel))
+            .overlay(Capsule().stroke(prominent ? Theme.accent : Theme.hairline, lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+        .opacity(isLoading ? 0.5 : 1)
+    }
+
+    private func shortcutKey(_ index: Int) -> KeyEquivalent {
+        guard index < 9 else { return KeyEquivalent("0") }
+        return KeyEquivalent(Character("\(index + 1)"))
+    }
+
+    // MARK: - Composer
+
+    private var composer: some View {
+        VStack(spacing: 0) {
+            HairlineDivider()
+            VStack(spacing: 7) {
+                HStack(alignment: .bottom, spacing: 8) {
+                    composerField
+                    micButton
+                    sendButton
+                }
+                composerHint
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+        }
+    }
+
+    private var composerField: some View {
+        ZStack(alignment: .topLeading) {
+            if draft.isEmpty {
+                Text(composerPlaceholder)
+                    .font(.system(size: 13.5)).foregroundStyle(Theme.textSecondary)
+                    .padding(.horizontal, 8).padding(.vertical, 11).allowsHitTesting(false)
+            }
+            AutoScrollTextEditor(text: $draft, isFocused: $composerFocused,
+                                 font: .systemFont(ofSize: 13.5), textColor: Theme.nsTextPrimary,
+                                 autoScroll: false, autoFocus: true)
+                .frame(height: 44)
+        }
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(
+            composerMode == .instruction ? Theme.accent : (composerFocused ? Theme.accent : Theme.hairline),
+            lineWidth: 1))
+    }
+
+    private var composerPlaceholder: String {
+        if composerMode == .instruction { return "Describe how to rewrite…  (⌘↩)" }
+        return thread.isEmpty ? settings.mode.inputPlaceholder : "Add text or a reply…"
+    }
+
+    private var micButton: some View {
+        Button { enterVoiceMode() } label: {
+            Image(systemName: "mic.fill").font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(Theme.surface))
+                .overlay(Circle().stroke(Theme.hairline, lineWidth: 1))
+        }
+        .buttonStyle(.plain).help("Dictate")
+    }
+
+    private var sendButton: some View {
+        Button { isLoading ? currentTask?.cancel() : sendDraft() } label: {
+            Image(systemName: isLoading ? "stop.fill" : "arrow.up")
+                .font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.accentInk)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(Theme.accent))
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut(.return, modifiers: .command)
+        .disabled(!isLoading && draftIsEmpty)
+        .opacity(!isLoading && draftIsEmpty ? 0.5 : 1)
+        .help(isLoading ? "Stop" : (composerMode == .instruction ? "Run instruction" : "Add to chat"))
+    }
+
+    private var composerHint: some View {
+        HStack {
+            if isLoading {
+                Text("STREAMING…").font(.mono(9)).tracking(1).foregroundStyle(Theme.accent)
+            } else if composerMode == .instruction {
+                Text("CUSTOM INSTRUCTION").font(.mono(9)).tracking(1).foregroundStyle(Theme.accent)
+            } else {
+                Text("\(wordCount(draft)) WORDS").font(.mono(9)).tracking(1).foregroundStyle(Theme.textSecondary)
+            }
+            Spacer()
+            Text(canAct ? "⌘1–\(min(settings.mode.actions.count, 9)) ACTIONS" : "⌘↩ SEND")
+                .font(.mono(9)).tracking(1).foregroundStyle(Theme.textSecondary)
         }
     }
 
@@ -392,9 +420,7 @@ struct PopoverView: View {
                 ScrollView {
                     VStack(spacing: 6) {
                         ForEach(settings.history) { item in
-                            Button {
-                                inputText = item.input; outputText = item.output; panel = .main
-                            } label: {
+                            Button { openHistory(item) } label: {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(item.actionLabel.uppercased())
                                         .font(.monoLabel(9)).tracking(1).foregroundStyle(Theme.accent)
@@ -415,80 +441,171 @@ struct PopoverView: View {
         .frame(maxHeight: .infinity)
     }
 
-    // MARK: - Run
-
-    private var isInputEmpty: Bool {
-        inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    private func openHistory(_ item: HistoryItem) {
+        newChat()
+        thread.append(ChatTurn(role: .user, text: item.input))
+        thread.append(ChatTurn(role: .assistant, text: item.output,
+                               actionLabel: item.actionLabel, sourceText: item.input))
+        panel = .main
     }
 
-    private func run(systemPrompt: String, label: String, variation: Bool = false) {
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+    // MARK: - Derived
+
+    private var latestUserText: String {
+        for t in thread.reversed() where t.role == .user {
+            return t.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return ""
+    }
+    private var canAct: Bool { !latestUserText.isEmpty && !isLoading }
+    private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    private func wordCount(_ s: String) -> Int {
+        s.split { $0 == " " || $0 == "\n" || $0 == "\t" }.count
+    }
+
+    // MARK: - Actions
+
+    private func sendDraft() {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        if composerMode == .instruction {
+            guard !latestUserText.isEmpty else { composerMode = .text; return }
+            draft = ""; composerMode = .text
+            run(systemPrompt: RewriteAction.customSystemPrompt(t), label: "Custom: \(t)")
+        } else {
+            thread.append(ChatTurn(role: .user, text: t, fromClipboard: fromClipboard))
+            draft = ""; fromClipboard = false
+        }
+    }
+
+    private func run(systemPrompt: String, label: String, variation: Bool = false, source: String? = nil) {
+        let src = (source ?? latestUserText).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !src.isEmpty else { return }
         currentTask?.cancel()
-        errorMessage = nil
         isLoading = true
-        outputText = ""
-        showDiff = false
-        fromClipboard = false
-        lastSystemPrompt = systemPrompt
-        lastLabel = label
-        diffInput = text
+
+        let turn = ChatTurn(role: .assistant, text: "", actionLabel: label,
+                            systemPrompt: systemPrompt, isStreaming: true, sourceText: src)
+        let id = turn.id
+        thread.append(turn)
+
         let provider = settings.makeProvider()
-        var payload = RewriteAction.wrap(text)
+        var payload = RewriteAction.wrap(src)
         if variation { payload += "\n\n(Give a noticeably different alternative version.)" }
 
         currentTask = Task {
             do {
                 let raw = try await provider.stream(text: payload, systemPrompt: systemPrompt) { piece in
-                    Task { @MainActor in outputText += piece }
+                    Task { @MainActor in mutateTurn(id) { $0.text += piece } }
                 }
                 let result = RewriteAction.clean(raw)
                 await MainActor.run {
-                    outputText = result
+                    mutateTurn(id) { $0.text = result; $0.isStreaming = false }
                     isLoading = false
-                    settings.addHistory(actionLabel: label, input: text, output: result)
-                    if settings.autoCopyResult { copyToClipboard() }
-                    withAnimation(.easeOut(duration: 0.25)) { justFinished = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                        withAnimation(.easeIn(duration: 0.5)) { justFinished = false }
-                    }
+                    settings.addHistory(actionLabel: label, input: src, output: result)
+                    if settings.autoCopyResult { setClipboard(result) }
                 }
             } catch {
                 await MainActor.run {
                     isLoading = false
-                    if !Task.isCancelled { errorMessage = error.localizedDescription }
+                    if Task.isCancelled {
+                        thread.removeAll { $0.id == id && $0.text.isEmpty }
+                        mutateTurn(id) { $0.isStreaming = false }
+                    } else {
+                        mutateTurn(id) {
+                            $0.text = error.localizedDescription
+                            $0.isStreaming = false
+                            $0.isError = true
+                        }
+                    }
                 }
             }
         }
     }
 
-    private func regenerate() {
-        guard let sp = lastSystemPrompt else { return }
-        run(systemPrompt: sp, label: lastLabel, variation: true)
+    private func mutateTurn(_ id: UUID, _ change: (inout ChatTurn) -> Void) {
+        if let i = thread.firstIndex(where: { $0.id == id }) { change(&thread[i]) }
     }
 
+    private func newChat() {
+        currentTask?.cancel()
+        isLoading = false
+        thread = []
+        draft = ""
+        composerMode = .text
+        fromClipboard = false
+        copiedTurnID = nil
+    }
+
+    // MARK: - Voice
+
+    private func enterVoiceMode() {
+        if !speech.isRecording { speech.toggle() }
+        voiceMode = true
+    }
+
+    private func finishVoice() {
+        let captured = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        if speech.isRecording { speech.stop() }
+        voiceMode = false
+        guard !captured.isEmpty else { return }
+        thread.append(ChatTurn(role: .user, text: captured))
+    }
+
+    private func cancelVoice() {
+        if speech.isRecording { speech.stop() }
+        voiceMode = false
+    }
+
+    // MARK: - Clipboard
+
     private func autoFillFromClipboard() {
-        guard settings.autoFillClipboard, isInputEmpty else { return }
+        guard settings.autoFillClipboard, thread.isEmpty, draft.isEmpty else { return }
         let pb = NSPasteboard.general
         guard pb.changeCount != lastClipboardCount else { return }
         lastClipboardCount = pb.changeCount
         if let s = pb.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !s.isEmpty, s.count <= 8000 {
-            inputText = s
-            fromClipboard = true
+            thread.append(ChatTurn(role: .user, text: s, fromClipboard: true))
         }
     }
 
-    private func runCustom() {
-        let instruction = customInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !instruction.isEmpty else { return }
-        run(systemPrompt: RewriteAction.customSystemPrompt(instruction), label: "Custom: \(instruction)")
+    private func setClipboard(_ s: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(s, forType: .string)
+    }
+}
+
+/// A simple wrapping layout (left-aligned rows) for the action chips.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 7
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
+        for sv in subviews {
+            let size = sv.sizeThatFits(.unspecified)
+            if x > 0 && x + size.width > maxWidth {
+                x = 0; y += rowHeight + spacing; rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        let width = maxWidth == .infinity ? x : maxWidth
+        return CGSize(width: width, height: y + rowHeight)
     }
 
-    private func copyToClipboard() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(outputText, forType: .string)
-        copied = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x: CGFloat = bounds.minX, y: CGFloat = bounds.minY, rowHeight: CGFloat = 0
+        for sv in subviews {
+            let size = sv.sizeThatFits(.unspecified)
+            if x > bounds.minX && x + size.width > bounds.maxX {
+                x = bounds.minX; y += rowHeight + spacing; rowHeight = 0
+            }
+            sv.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }
