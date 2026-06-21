@@ -18,9 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         popover = NSPopover()
         popover.contentSize = NSSize(width: 380, height: 668)
-        // Persistent: stays open when you click elsewhere; only the menu-bar icon
-        // (or the hotkey) toggles it closed.
-        popover.behavior = .applicationDefined
+        // Transient: clicking outside the popover (or in another app) dismisses it.
+        popover.behavior = .transient
         // First-mouse hosting so a single click registers even when the agent
         // app's popover window isn't the key window (fixes "click twice to act").
         popover.contentViewController = FirstMouseHostingController(rootView: PopoverView())
