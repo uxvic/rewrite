@@ -37,14 +37,10 @@ struct VoiceOverlayView: View {
     /// "visualizer" panel so the additive neon reads in both light and dark mode.
     private var strands: some View {
         StrandsView(
-            colors: [
-                Color(nsColor: NSColor(hex: "#F97316")),
-                Color(nsColor: NSColor(hex: "#7C3AED")),
-                Color(nsColor: NSColor(hex: "#06B6D4"))
-            ],
+            colors: ["#F97316", "#7C3AED", "#06B6D4"],
             count: 3, speed: 0.5, amplitude: 1, waviness: 1,
             thickness: 0.7, glow: 2.6, taper: 3, spread: 1,
-            intensity: 0.6, scale: 1.5,
+            hueShift: 0, intensity: 0.6, saturation: 2, opacity: 1, scale: 1.5,
             level: speech.level
         )
         .frame(maxWidth: .infinity)
