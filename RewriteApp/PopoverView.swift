@@ -4,7 +4,7 @@ import AppKit
 /// One message in the rewrite conversation. User turns hold the source text;
 /// assistant turns hold a rewrite (streamed in) plus the action that produced it.
 struct ChatTurn: Identifiable, Equatable {
-    enum Role { case user, assistant, setup }
+    enum Role { case user, assistant, setup, whatsNew }
     let id = UUID()
     var role: Role
     var text: String
@@ -122,9 +122,52 @@ struct PopoverView: View {
 
     private var chatPanel: some View {
         VStack(spacing: 0) {
+            if showWhatsNew { whatsNewBanner }
             threadView
             composer
         }
+    }
+
+    // MARK: - What's new
+
+    private var showWhatsNew: Bool {
+        settings.lastSeenWhatsNewVersion != AppUpdater.shared.currentVersion
+    }
+
+    /// Slim, dismissible bar pinned to the top of the chat after an update.
+    private var whatsNewBanner: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.accent)
+            Text("What's new in \(AppUpdater.shared.currentVersion)")
+                .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+            Spacer(minLength: 6)
+            Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary)
+            Button { markWhatsNewSeen() } label: {
+                Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Theme.textSecondary).frame(width: 22, height: 22)
+            }.buttonStyle(.plain).help("Dismiss")
+        }
+        .padding(.horizontal, 14).padding(.vertical, 9)
+        .background(Theme.accent.opacity(0.10))
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.fillTranslucent.opacity(0.08)).frame(height: 1) }
+        .contentShape(Rectangle())
+        .onTapGesture { openWhatsNew() }
+    }
+
+    private func openWhatsNew() {
+        markWhatsNewSeen()
+        if !thread.contains(where: { $0.role == .whatsNew }) {
+            thread.append(ChatTurn(role: .whatsNew, text: ""))
+        }
+    }
+
+    private func markWhatsNewSeen() {
+        settings.lastSeenWhatsNewVersion = AppUpdater.shared.currentVersion
+    }
+
+    private func dismissWhatsNew(_ id: UUID) {
+        thread.removeAll { $0.id == id }
+        markWhatsNewSeen()
     }
 
     private var threadView: some View {
@@ -163,6 +206,7 @@ struct PopoverView: View {
         case .user:      userBubble(turn)
         case .assistant: assistantTurn(turn)
         case .setup:     SetupCardView(onReady: retryPending) { dismissSetup(turn.id) }
+        case .whatsNew:  WhatsNewCardView { dismissWhatsNew(turn.id) }
         }
     }
 
@@ -723,5 +767,67 @@ struct SetupCardView: View {
             return "Built-in AI isn't available on this Mac. Pick another provider below."
         }
         return "Choose a model provider to continue — you can change it anytime in Settings."
+    }
+}
+
+/// Friendly "what's new" card populated into the chat after an update — a quick,
+/// fun tour of what moved and how to use it.
+struct WhatsNewCardView: View {
+    var onDismiss: () -> Void
+
+    private struct Highlight: Identifiable {
+        let id = UUID(); let icon: String; let title: String; let blurb: String
+    }
+
+    private let highlights: [Highlight] = [
+        .init(icon: "arrow.up.circle.fill", title: "New composer",
+              blurb: "The send button lives inside the box now — and it grows as you type."),
+        .init(icon: "hand.tap.fill", title: "Pick a style, then send",
+              blurb: "Tap an action below the input to select it, then send. Scroll the row for more."),
+        .init(icon: "sparkles", title: "Set up without leaving chat",
+              blurb: "Choose a model — or sign in for free models — right here in the conversation."),
+        .init(icon: "pin.fill", title: "Stays open",
+              blurb: "The window no longer closes when you click away. Toggle it from the menu-bar icon.")
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles").font(.system(size: 14)).foregroundStyle(Theme.accent)
+                Text("What's new in \(AppUpdater.shared.currentVersion)")
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                Spacer()
+                Button { onDismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                }.buttonStyle(.plain).help("Dismiss")
+            }
+
+            Text("A few things moved to make rewriting faster. Here's the quick tour:")
+                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(highlights) { h in
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: h.icon).font(.system(size: 13)).foregroundStyle(Theme.accent)
+                            .frame(width: 20, alignment: .center)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(h.title).font(.system(size: 12.5, weight: .semibold))
+                                .foregroundStyle(Theme.textPrimary)
+                            Text(h.blurb).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+
+            Button { onDismiss() } label: { Text("Try it") }
+                .buttonStyle(InstrumentButtonStyle(prominent: true))
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .module(Theme.surface)
+        .padding(.trailing, 8)
     }
 }

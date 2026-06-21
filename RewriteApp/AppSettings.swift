@@ -93,6 +93,10 @@ final class AppSettings: ObservableObject {
     @Published var gatewayBaseURL: String {
         didSet { defaults.set(gatewayBaseURL, forKey: "gatewayBaseURL") }
     }
+    /// The app version whose "What's new" card the user has already seen.
+    @Published var lastSeenWhatsNewVersion: String {
+        didSet { defaults.set(lastSeenWhatsNewVersion, forKey: "lastSeenWhatsNewVersion") }
+    }
     var isSignedInToHosted: Bool { !hostedToken.isEmpty }
 
     // Hotkeys
@@ -155,6 +159,7 @@ final class AppSettings: ObservableObject {
         hostedToken = KeychainStore.loadHostedToken() ?? ""
         hostedEmail = defaults.string(forKey: "hostedEmail") ?? ""
         gatewayBaseURL = defaults.string(forKey: "gatewayBaseURL") ?? GatewayConfig.defaultBaseURL
+        lastSeenWhatsNewVersion = defaults.string(forKey: "lastSeenWhatsNewVersion") ?? ""
         popoverHotKeyID = defaults.string(forKey: "popoverHotKeyID") ?? "optSpace"
         inPlaceHotKeyID = defaults.string(forKey: "inPlaceHotKeyID") ?? "optShiftSpace"
         defaultInPlaceAction = defaults.string(forKey: "defaultInPlaceAction")
