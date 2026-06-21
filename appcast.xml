@@ -3,12 +3,12 @@
     <channel>
         <title>Rewrite</title>
         <item>
-            <title>1.4.1</title>
-            <pubDate>Sun, 21 Jun 2026 16:05:17 +0100</pubDate>
-            <sparkle:version>1.4.1</sparkle:version>
-            <sparkle:shortVersionString>1.4.1</sparkle:shortVersionString>
+            <title>1.4.2</title>
+            <pubDate>Sun, 21 Jun 2026 16:17:11 +0100</pubDate>
+            <sparkle:version>1.4.2</sparkle:version>
+            <sparkle:shortVersionString>1.4.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/uxvic/rewrite/releases/download/v1.4.1/Rewrite-1.4.1.zip" length="2449728" type="application/octet-stream" sparkle:edSignature="Xp711Ac6dZIO3DIw4rdS46FY13y8DDWhOlJX2z36CS0l1sophmTwS3Zl6Tsg7BOtAWblkgdmEIWq1tarOoUhBw=="/>
+            <enclosure url="https://github.com/uxvic/rewrite/releases/download/v1.4.2/Rewrite-1.4.2.zip" length="2265749" type="application/octet-stream" sparkle:edSignature="I5BScI5Kan21X1/1aFmTQntXwajmcHCVIs1ABCJGo5ZocOtaV092nxy93vxWsH95y0hs4DMiHr0z1bzl3vbQDw=="/>
         </item>
     </channel>
 </rss>
