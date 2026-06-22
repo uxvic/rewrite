@@ -26,6 +26,9 @@ struct SettingsView: View {
                 presetsSection
                 HairlineDivider()
                 updatesSection
+                HairlineDivider()
+                Link("Privacy Policy", destination: URL(string: "https://uxvic.github.io/rewrite/privacy.html")!)
+                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.accent)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -236,17 +239,26 @@ struct HostedSignInView: View {
     @State private var busy = false
     @State private var error: String?
     @State private var info: String?
+    @State private var confirmDelete = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if settings.isSignedInToHosted {
-                HStack(spacing: 6) {
-                    LEDDot(color: Theme.accent)
-                    Text("Signed in · \(settings.hostedEmail)")
-                        .font(.system(size: 11)).foregroundStyle(Theme.accent).lineLimit(1)
-                    Spacer()
-                    Button { signOut() } label: { Text("Sign out") }
-                        .buttonStyle(InstrumentButtonStyle()).controlSize(.small)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        LEDDot(color: Theme.accent)
+                        Text("Signed in · \(settings.hostedEmail)")
+                            .font(.system(size: 11)).foregroundStyle(Theme.accent).lineLimit(1)
+                        Spacer()
+                        Button { signOut() } label: { Text("Sign out") }
+                            .buttonStyle(InstrumentButtonStyle()).controlSize(.small)
+                    }
+                    Button { confirmDelete = true } label: {
+                        Text(busy ? "Deleting…" : "Delete account")
+                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.ledFail)
+                    }
+                    .buttonStyle(.plain).disabled(busy)
+                    .help("Removes your account from the gateway and unsubscribes you from the newsletter.")
                 }
             } else {
                 switch stage {
@@ -278,6 +290,12 @@ struct HostedSignInView: View {
                 Text(error).font(.system(size: 11)).foregroundStyle(Theme.ledFail)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+        .alert("Delete your account?", isPresented: $confirmDelete) {
+            Button("Delete account", role: .destructive) { deleteAccount() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes your sign-in from the gateway and unsubscribes \(settings.hostedEmail) from the newsletter. You can sign in again anytime.")
         }
     }
 
@@ -347,6 +365,23 @@ struct HostedSignInView: View {
         settings.hostedToken = ""
         settings.hostedEmail = ""
         stage = .email; email = ""; code = ""
+    }
+
+    private func deleteAccount() {
+        busy = true; error = nil; info = nil
+        let token = settings.hostedToken; let url = settings.gatewayBaseURL
+        Task {
+            do {
+                try await GatewayAuth.deleteAccount(token: token, baseURL: url)
+                await MainActor.run {
+                    settings.hostedToken = ""; settings.hostedEmail = ""
+                    stage = .email; email = ""; code = ""; busy = false
+                    info = "Account deleted."
+                }
+            } catch {
+                await MainActor.run { self.error = friendly(error); busy = false }
+            }
+        }
     }
 }
 
