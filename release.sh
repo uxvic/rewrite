@@ -50,6 +50,21 @@ if upstream=$(git -C "$ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 
 else
   echo "  (no upstream tracking branch — skipping behind/diverged check)"
 fi
+
+# Catch the "forgot to merge the PR" trap: warn if open PRs still target main.
+if command -v gh >/dev/null 2>&1; then
+  open_count=$(gh pr list --repo "$GH_USER/$GH_REPO" --state open --base main --json number --jq 'length' 2>/dev/null || echo 0)
+  if [ "${open_count:-0}" -gt 0 ] 2>/dev/null; then
+    echo "⚠️  $open_count open PR(s) target main — merge them first if this release should include them:"
+    gh pr list --repo "$GH_USER/$GH_REPO" --state open --base main 2>/dev/null || true
+    if [ -t 0 ]; then
+      printf "   Build anyway? [y/N] "; read -r reply
+      case "$reply" in [yY]*) ;; *) echo "Aborted."; exit 1 ;; esac
+    else
+      echo "   (non-interactive — continuing)"
+    fi
+  fi
+fi
 # ---------------------------------------------------------------------------
 
 echo "▸ Version $VERSION"

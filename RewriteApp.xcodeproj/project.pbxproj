@@ -29,6 +29,7 @@
 		3A0000000000000000000014 /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000014 /* Permissions.swift */; };
 		3A0000000000000000000015 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000015 /* WelcomeView.swift */; };
 		3A0000000000000000000016 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000016 /* AppIcon.icns */; };
+		3A0000000000000000000021 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000021 /* PrivacyInfo.xcprivacy */; };
 		3A0000000000000000000017 /* RewriteMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000017 /* RewriteMode.swift */; };
 		3A0000000000000000000018 /* TextDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000018 /* TextDiff.swift */; };
 		3A0000000000000000000019 /* AutoScrollTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000019 /* AutoScrollTextEditor.swift */; };
@@ -63,6 +64,7 @@
 		2A0000000000000000000014 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
 		2A0000000000000000000015 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		2A0000000000000000000016 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		2A0000000000000000000021 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		2A0000000000000000000017 /* RewriteMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewriteMode.swift; sourceTree = "<group>"; };
 		2A0000000000000000000018 /* TextDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextDiff.swift; sourceTree = "<group>"; };
 		2A0000000000000000000019 /* AutoScrollTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoScrollTextEditor.swift; sourceTree = "<group>"; };
@@ -144,6 +146,7 @@
 				2A000000000000000000001A /* VoiceOverlayView.swift */,
 				2A000000000000000000001B /* StrandsView.swift */,
 				2A0000000000000000000016 /* AppIcon.icns */,
+				2A0000000000000000000021 /* PrivacyInfo.xcprivacy */,
 				1A0000000000000000000010 /* Info.plist */,
 			);
 			path = RewriteApp;
@@ -209,6 +212,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3A0000000000000000000016 /* AppIcon.icns in Resources */,
+				3A0000000000000000000021 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
