@@ -31,6 +31,23 @@ struct HistoryItem: Codable, Identifiable {
     let actionLabel: String
     let input: String
     let output: String
+    var mode: RewriteMode = .writing
+
+    private enum CodingKeys: String, CodingKey { case id, actionLabel, input, output, mode }
+
+    init(id: String, actionLabel: String, input: String, output: String, mode: RewriteMode = .writing) {
+        self.id = id; self.actionLabel = actionLabel; self.input = input; self.output = output; self.mode = mode
+    }
+
+    // Decode older saved items that predate `mode` by defaulting to .writing.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        actionLabel = try c.decode(String.self, forKey: .actionLabel)
+        input = try c.decode(String.self, forKey: .input)
+        output = try c.decode(String.self, forKey: .output)
+        mode = try c.decodeIfPresent(RewriteMode.self, forKey: .mode) ?? .writing
+    }
 }
 
 /// A user-defined preset button (label + instruction).
@@ -183,8 +200,8 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    func addHistory(actionLabel: String, input: String, output: String) {
-        let item = HistoryItem(id: UUID().uuidString, actionLabel: actionLabel, input: input, output: output)
+    func addHistory(actionLabel: String, input: String, output: String, mode: RewriteMode) {
+        let item = HistoryItem(id: UUID().uuidString, actionLabel: actionLabel, input: input, output: output, mode: mode)
         history.insert(item, at: 0)
         if history.count > 20 { history = Array(history.prefix(20)) }
     }

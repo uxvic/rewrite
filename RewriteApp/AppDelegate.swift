@@ -177,7 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 TextReplacementService.restoreClipboard(originalClipboard)
                 await MainActor.run {
                     settings.addHistory(actionLabel: "\(action.label) (in place)",
-                                        input: selection, output: result)
+                                        input: selection, output: result, mode: .writing)
                 }
             } catch {
                 TextReplacementService.restoreClipboard(originalClipboard)
