@@ -48,6 +48,10 @@ struct PopoverView: View {
     private enum Panel { case main, settings, history }
     @State private var panel: Panel = .main
 
+    /// Which mode's rewrites the History panel is showing (its own Writing/Prompt
+    /// tab, independent of the chat's active mode).
+    @State private var historyMode: RewriteMode = .writing
+
     /// Writing and Prompt keep separate conversations + drafts, keyed by mode,
     /// so switching tabs never mixes their messages.
     private var thread: [ChatTurn] {
@@ -93,7 +97,7 @@ struct PopoverView: View {
             }
             Spacer(minLength: 6)
             if panel == .main {
-                modePill
+                modeSegmented($settings.mode, width: 200)
             } else {
                 Text(panel == .settings ? "Settings" : "History")
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
@@ -107,11 +111,12 @@ struct PopoverView: View {
         .padding(.horizontal, 14).padding(.vertical, 11)
     }
 
-    /// Soft segmented WRITING / PROMPT pill.
-    private var modePill: some View {
+    /// Soft segmented WRITING / PROMPT pill, bound to any mode selection so it can
+    /// drive both the chat header and the History filter.
+    private func modeSegmented(_ selection: Binding<RewriteMode>, width: CGFloat = 200) -> some View {
         HStack(spacing: 0) {
             ForEach(RewriteMode.allCases) { m in
-                let active = settings.mode == m
+                let active = selection.wrappedValue == m
                 Text(m.title.capitalized)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(active ? Theme.accentInk : Theme.textSecondary)
@@ -120,13 +125,13 @@ struct PopoverView: View {
                         if active { Capsule().fill(Theme.accent) }
                     }
                     .contentShape(Capsule())
-                    .onTapGesture { withAnimation(.easeInOut(duration: 0.18)) { settings.mode = m } }
+                    .onTapGesture { withAnimation(.easeInOut(duration: 0.18)) { selection.wrappedValue = m } }
             }
         }
         .padding(3)
         .background(Capsule().fill(Theme.fillTranslucent.opacity(0.06)))
         .overlay(Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1))
-        .frame(width: 200)
+        .frame(width: width)
     }
 
     // MARK: - Chat panel
@@ -465,24 +470,24 @@ struct PopoverView: View {
     // MARK: - History panel
 
     private var historyPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let items = settings.history.filter { $0.mode == historyMode }
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
-                SectionLabel(text: "Recent rewrites")
-                Spacer()
+                modeSegmented($historyMode, width: 200)
+                Spacer(minLength: 6)
                 if !settings.history.isEmpty {
                     Button { settings.history = [] } label: { Text("Clear") }
                         .buttonStyle(InstrumentButtonStyle()).controlSize(.mini)
                 }
             }
-            if settings.history.isEmpty {
-                Text("Your recent rewrites will appear here.")
+            if items.isEmpty {
+                Text("No \(historyMode.title.capitalized) rewrites yet.")
                     .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        historyGroup("Writing", items: settings.history.filter { $0.mode == .writing })
-                        historyGroup("Prompt", items: settings.history.filter { $0.mode == .prompt })
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(items) { historyRow($0) }
                     }
                     .padding(.vertical, 2)
                 }
@@ -490,19 +495,7 @@ struct PopoverView: View {
         }
         .padding(16)
         .frame(maxHeight: .infinity)
-    }
-
-    /// One labelled history section ("Writing" / "Prompt"), hidden when empty.
-    @ViewBuilder
-    private func historyGroup(_ title: String, items: [HistoryItem]) -> some View {
-        if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title.uppercased())
-                    .font(.system(size: 10, weight: .semibold)).tracking(1)
-                    .foregroundStyle(Theme.textSecondary)
-                ForEach(items) { historyRow($0) }
-            }
-        }
+        .onAppear { historyMode = settings.mode }
     }
 
     private func historyRow(_ item: HistoryItem) -> some View {
