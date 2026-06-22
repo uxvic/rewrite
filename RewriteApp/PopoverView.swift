@@ -801,14 +801,14 @@ struct WhatsNewCardView: View {
     }
 
     private let highlights: [Highlight] = [
-        .init(icon: "arrow.up.circle.fill", title: "New composer",
-              blurb: "The send button lives inside the box now — and it grows as you type."),
-        .init(icon: "hand.tap.fill", title: "Pick a style, then send",
-              blurb: "Tap an action below the input to select it, then send. Scroll the row for more."),
-        .init(icon: "sparkles", title: "Set up without leaving chat",
-              blurb: "Choose a model — or sign in for free models — right here in the conversation."),
-        .init(icon: "pin.fill", title: "Stays open",
-              blurb: "The window no longer closes when you click away. Toggle it from the menu-bar icon.")
+        .init(icon: "rectangle.split.2x1", title: "Writing & Prompt, kept apart",
+              blurb: "Each tab keeps its own conversation and history now — switching never mixes them up."),
+        .init(icon: "wand.and.stars", title: "Just hit send",
+              blurb: "Send without picking a style and Rewrite fixes grammar and polishes for you — Prompt mode optimizes."),
+        .init(icon: "lock.shield", title: "Your data, your call",
+              blurb: "Sign-in stays optional, and you can delete your account and data anytime from Settings."),
+        .init(icon: "text.bubble", title: "What's new, right here",
+              blurb: "Release notes now land straight in the chat — no extra windows to chase.")
     ]
 
     var body: some View {
@@ -824,7 +824,7 @@ struct WhatsNewCardView: View {
                 }.buttonStyle(.plain).help("Dismiss")
             }
 
-            Text("A few things moved to make rewriting faster. Here's the quick tour:")
+            Text("A few new things since your last update. Here's the quick tour:")
                 .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
