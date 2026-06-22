@@ -3,7 +3,7 @@ import { cors } from "hono/cors";
 import type { Env } from "./model";
 import { callModel } from "./model";
 import { sendCodeEmail } from "./email";
-import { subscribeToNewsletter } from "./newsletter";
+import { subscribeToNewsletter, unsubscribeFromNewsletter } from "./newsletter";
 
 const app = new Hono<{ Bindings: Env }>();
 app.use("*", cors());
@@ -111,6 +111,21 @@ app.post("/v1/rewrite", async (c) => {
   return new Response(stream, {
     headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" },
   });
+});
+
+// 4) Delete account: revoke the token + best-effort newsletter unsubscribe.
+// Required so the app can offer in-app account deletion (App Store 5.1.1(v)).
+app.delete("/auth/delete", async (c) => {
+  const auth = c.req.header("Authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  const userRaw = token ? await c.env.RW_KV.get(`tok:${token}`) : null;
+  if (!userRaw) return c.json({ error: "Not signed in." }, 401);
+
+  const email = (() => { try { return String(JSON.parse(userRaw)?.email ?? ""); } catch { return ""; } })();
+  await c.env.RW_KV.delete(`tok:${token}`);
+  await c.env.RW_KV.delete(`cnt:${token}:${todayKey()}`);
+  if (email) await unsubscribeFromNewsletter(c.env, email); // non-fatal
+  return c.json({ ok: true });
 });
 
 export default app;

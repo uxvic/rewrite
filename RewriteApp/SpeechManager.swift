@@ -57,6 +57,11 @@ final class SpeechManager: ObservableObject {
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
+        // Keep dictation fully on-device when the recognizer supports it (true on
+        // macOS 14+ for en-US), so transcription never leaves the Mac.
+        if recognizer.supportsOnDeviceRecognition {
+            request.requiresOnDeviceRecognition = true
+        }
         self.request = request
 
         let inputNode = audioEngine.inputNode
