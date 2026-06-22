@@ -31,8 +31,8 @@ struct PopoverView: View {
     @ObservedObject private var settings = AppSettings.shared
     @StateObject private var speech = SpeechManager()
 
-    @State private var thread: [ChatTurn] = []
-    @State private var draft = ""
+    @State private var threadByMode: [RewriteMode: [ChatTurn]] = [:]
+    @State private var draftByMode: [RewriteMode: String] = [:]
     @State private var composerMode: ComposerMode = .text
     @State private var selectedAction: SelectedAction?
     @State private var pendingRetry: PendingRun?
@@ -47,6 +47,17 @@ struct PopoverView: View {
 
     private enum Panel { case main, settings, history }
     @State private var panel: Panel = .main
+
+    /// Writing and Prompt keep separate conversations + drafts, keyed by mode,
+    /// so switching tabs never mixes their messages.
+    private var thread: [ChatTurn] {
+        get { threadByMode[settings.mode] ?? [] }
+        nonmutating set { threadByMode[settings.mode] = newValue }
+    }
+    private var draft: String {
+        get { draftByMode[settings.mode] ?? "" }
+        nonmutating set { draftByMode[settings.mode] = newValue }
+    }
 
     var body: some View {
         Group {
@@ -131,14 +142,14 @@ struct PopoverView: View {
     // MARK: - What's new
 
     private var showWhatsNew: Bool {
-        settings.lastSeenWhatsNewVersion != AppUpdater.shared.currentVersion
+        settings.lastSeenWhatsNewVersion != AppUpdater.shared.featureVersion
     }
 
     /// Slim, dismissible bar pinned to the top of the chat after an update.
     private var whatsNewBanner: some View {
         HStack(spacing: 9) {
             Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.accent)
-            Text("What's new in \(AppUpdater.shared.currentVersion)")
+            Text("What's new in \(AppUpdater.shared.featureVersion)")
                 .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.textPrimary)
             Spacer(minLength: 6)
             Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary)
@@ -162,7 +173,7 @@ struct PopoverView: View {
     }
 
     private func markWhatsNewSeen() {
-        settings.lastSeenWhatsNewVersion = AppUpdater.shared.currentVersion
+        settings.lastSeenWhatsNewVersion = AppUpdater.shared.featureVersion
     }
 
     private func dismissWhatsNew(_ id: UUID) {
@@ -423,7 +434,9 @@ struct PopoverView: View {
     /// Growing pill input (1→~4 lines, then scrolls) with the send button inside.
     private var composerField: some View {
         HStack(alignment: .bottom, spacing: 6) {
-            TextField(composerPlaceholder, text: $draft, axis: .vertical)
+            TextField(composerPlaceholder,
+                      text: Binding(get: { draft }, set: { draft = $0 }),
+                      axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.textPrimary)
@@ -485,21 +498,9 @@ struct PopoverView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    VStack(spacing: 8) {
-                        ForEach(settings.history) { item in
-                            Button { openHistory(item) } label: {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(item.actionLabel)
-                                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.accent)
-                                    Text(item.output).font(.system(size: 12)).foregroundStyle(Theme.textPrimary)
-                                        .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .padding(12)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .module(Theme.panel)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                    VStack(alignment: .leading, spacing: 14) {
+                        historyGroup("Writing", items: settings.history.filter { $0.mode == .writing })
+                        historyGroup("Prompt", items: settings.history.filter { $0.mode == .prompt })
                     }
                     .padding(.vertical, 2)
                 }
@@ -509,7 +510,36 @@ struct PopoverView: View {
         .frame(maxHeight: .infinity)
     }
 
+    /// One labelled history section ("Writing" / "Prompt"), hidden when empty.
+    @ViewBuilder
+    private func historyGroup(_ title: String, items: [HistoryItem]) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title.uppercased())
+                    .font(.system(size: 10, weight: .semibold)).tracking(1)
+                    .foregroundStyle(Theme.textSecondary)
+                ForEach(items) { historyRow($0) }
+            }
+        }
+    }
+
+    private func historyRow(_ item: HistoryItem) -> some View {
+        Button { openHistory(item) } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.actionLabel)
+                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.accent)
+                Text(item.output).font(.system(size: 12)).foregroundStyle(Theme.textPrimary)
+                    .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .module(Theme.panel)
+        }
+        .buttonStyle(.plain)
+    }
+
     private func openHistory(_ item: HistoryItem) {
+        settings.mode = item.mode   // open in the matching tab; computed thread targets it
         newChat()
         thread.append(ChatTurn(role: .user, text: item.input))
         thread.append(ChatTurn(role: .assistant, text: item.output,
@@ -538,10 +568,13 @@ struct PopoverView: View {
             run(systemPrompt: RewriteAction.customSystemPrompt(t), label: "Custom: \(t)")
             return
         }
-        guard let sel = selectedAction else {
-            showSelectPrompt = true   // nudge: pick how to rewrite, or "Send as-is"
-            return
-        }
+        // No explicit action picked → apply the mode's sensible default
+        // (Writing: fix grammar + light polish; Prompt: optimize) instead of
+        // sending raw text that never gets rewritten.
+        let sel = selectedAction ?? {
+            let d = settings.mode.defaultAction
+            return SelectedAction(id: d.id, systemPrompt: d.systemPrompt, label: d.label)
+        }()
         addUserTurn(t)
         run(systemPrompt: sel.systemPrompt, label: sel.label)
     }
@@ -561,6 +594,7 @@ struct PopoverView: View {
     private func run(systemPrompt: String, label: String, variation: Bool = false, source: String? = nil) {
         let src = (source ?? latestUserText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !src.isEmpty else { return }
+        let runMode = settings.mode   // tag history with the mode this rewrite belongs to
         currentTask?.cancel()
         isLoading = true
 
@@ -582,7 +616,7 @@ struct PopoverView: View {
                 await MainActor.run {
                     mutateTurn(id) { $0.text = result; $0.isStreaming = false }
                     isLoading = false
-                    settings.addHistory(actionLabel: label, input: src, output: result)
+                    settings.addHistory(actionLabel: label, input: src, output: result, mode: runMode)
                     if settings.autoCopyResult { setClipboard(result) }
                 }
             } catch {
@@ -799,7 +833,7 @@ struct WhatsNewCardView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "sparkles").font(.system(size: 14)).foregroundStyle(Theme.accent)
-                Text("What's new in \(AppUpdater.shared.currentVersion)")
+                Text("What's new in \(AppUpdater.shared.featureVersion)")
                     .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.textPrimary)
                 Spacer()
                 Button { onDismiss() } label: {

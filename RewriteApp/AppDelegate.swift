@@ -1,10 +1,11 @@
 import AppKit
 import SwiftUI
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var welcomeWindow: NSWindow?
+    private var clickMonitor: Any?
     private let hotKey = HotKeyManager()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -18,8 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         popover = NSPopover()
         popover.contentSize = NSSize(width: 380, height: 668)
-        // Transient: clicking outside the popover (or in another app) dismisses it.
-        popover.behavior = .transient
+        // We drive dismissal ourselves (global click monitor + resign-active) so
+        // clicking outside reliably closes it on this menu-bar agent app, where
+        // .transient is unreliable after we activate + makeKey the popover window.
+        popover.behavior = .applicationDefined
+        popover.delegate = self
         // First-mouse hosting so a single click registers even when the agent
         // app's popover window isn't the key window (fixes "click twice to act").
         popover.contentViewController = FirstMouseHostingController(rootView: PopoverView())
@@ -27,6 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         registerHotKeys()
         NotificationCenter.default.addObserver(self, selector: #selector(registerHotKeys),
                                                name: .hotKeysChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(appResignedActive),
+                                               name: NSApplication.didResignActiveNotification, object: nil)
 
         _ = AppUpdater.shared   // starts Sparkle + scheduled checks
 
@@ -114,15 +120,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func quit() { NSApp.terminate(nil) }
 
     @objc func togglePopover(_ sender: Any?) {
+        if popover.isShown { closePopover() } else { showPopover() }
+    }
+
+    private func showPopover() {
         guard let button = statusItem.button else { return }
-        if popover.isShown {
-            popover.performClose(sender)
-        } else {
-            NSApp.activate(ignoringOtherApps: true)
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
+        NSApp.activate(ignoringOtherApps: true)
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+        // A global monitor fires for clicks that land in another app or the desktop
+        // (never for clicks inside our own popover), so this closes on "click outside".
+        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.closePopover()
         }
     }
+
+    private func closePopover() {
+        if let monitor = clickMonitor { NSEvent.removeMonitor(monitor); clickMonitor = nil }
+        if popover.isShown { popover.performClose(nil) }
+    }
+
+    /// Cleans up the monitor however the popover was closed (toggle, Esc, etc.).
+    func popoverDidClose(_ notification: Notification) {
+        if let monitor = clickMonitor { NSEvent.removeMonitor(monitor); clickMonitor = nil }
+    }
+
+    @objc private func appResignedActive() { closePopover() }
 
     // MARK: - Rewrite selection in place (anywhere)
 
@@ -154,7 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 TextReplacementService.restoreClipboard(originalClipboard)
                 await MainActor.run {
                     settings.addHistory(actionLabel: "\(action.label) (in place)",
-                                        input: selection, output: result)
+                                        input: selection, output: result, mode: .writing)
                 }
             } catch {
                 TextReplacementService.restoreClipboard(originalClipboard)

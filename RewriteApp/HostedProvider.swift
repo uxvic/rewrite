@@ -76,6 +76,22 @@ enum GatewayAuth {
         return token
     }
 
+    /// Revokes the token on the gateway and unsubscribes the email (account deletion).
+    static func deleteAccount(token: String, baseURL: String) async throws {
+        guard let url = URL(string: baseURL.trimmingCharacters(in: .whitespaces) + "/auth/delete") else {
+            throw AuthError(message: "Invalid gateway URL.")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw AuthError(message: "No response from gateway.") }
+        guard http.statusCode == 200 else {
+            let json = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+            throw AuthError(message: (json["error"] as? String) ?? "Delete failed (HTTP \(http.statusCode)).")
+        }
+    }
+
     @discardableResult
     private static func post(_ path: String, baseURL: String, body: [String: String]) async throws -> [String: Any] {
         guard let url = URL(string: baseURL.trimmingCharacters(in: .whitespaces) + path) else {

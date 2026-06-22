@@ -31,3 +31,26 @@ export async function subscribeToNewsletter(env: Env, email: string): Promise<vo
     console.log("Kit subscribe error:", (e as Error).message);
   }
 }
+
+// Unsubscribes an email from Kit when the user deletes their account.
+// Non-fatal: a newsletter hiccup must not block account deletion.
+export async function unsubscribeFromNewsletter(env: Env, email: string): Promise<void> {
+  if (!env.KIT_API_KEY) return;
+  try {
+    const lookup = await fetch(
+      `https://api.kit.com/v4/subscribers?email_address=${encodeURIComponent(email)}`,
+      { headers: { "X-Kit-Api-Key": env.KIT_API_KEY } },
+    );
+    if (!lookup.ok) { console.log(`Kit lookup ${lookup.status}`); return; }
+    const data = (await lookup.json()) as { subscribers?: Array<{ id: number }> };
+    const id = data.subscribers?.[0]?.id;
+    if (!id) return;
+    const res = await fetch(`https://api.kit.com/v4/subscribers/${id}/unsubscribe`, {
+      method: "POST",
+      headers: { "X-Kit-Api-Key": env.KIT_API_KEY },
+    });
+    if (!res.ok) console.log(`Kit unsubscribe ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  } catch (e) {
+    console.log("Kit unsubscribe error:", (e as Error).message);
+  }
+}

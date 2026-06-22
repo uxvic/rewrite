@@ -10,7 +10,7 @@ struct PresetAction: Identifiable, Equatable {
 }
 
 /// Top-level mode that swaps the available actions + input hints.
-enum RewriteMode: String, CaseIterable, Identifiable {
+enum RewriteMode: String, CaseIterable, Identifiable, Codable {
     case writing
     case prompt
 
@@ -32,6 +32,21 @@ enum RewriteMode: String, CaseIterable, Identifiable {
             }
         case .prompt:
             return Self.promptActions
+        }
+    }
+
+    /// The action applied when the user sends text without explicitly picking one.
+    /// Writing: a light polish (fix grammar + improve clarity). Prompt: Optimize.
+    var defaultAction: PresetAction {
+        switch self {
+        case .writing:
+            return PresetAction(
+                id: "auto", label: "Improve", systemImage: "sparkles",
+                systemPrompt: RewriteAction.customSystemPrompt(
+                    "Fix any grammar, spelling and punctuation mistakes and lightly improve clarity and flow, "
+                    + "without changing the meaning, tone, or language."))
+        case .prompt:
+            return Self.promptActions[0]   // "Optimize"
         }
     }
 
