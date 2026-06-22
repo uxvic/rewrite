@@ -46,12 +46,25 @@ file's IIFE body into `code.js`, and run it on the open file. Same result.
 The script is **idempotent** — re-running removes its own previously-created nodes
 first, so it won't pile up duplicates.
 
-## Remaining batches (to be added)
-- **Batch 2** — remaining chat states: empty, "pick a style" nudge, typing, diff,
-  error, Setup-card variants, History (empty / with items).
-- **Batch 3** — Settings frames (per-provider blocks + General / Custom Presets /
-  Updates / Privacy).
-- **Batch 4** — Voice overlay (Listening / Transcribing) + Welcome window (460×560).
+## The other batches
+Each is a standalone script that draws onto the **same** "Rewrite — Full UI" page (offset
+to the right/below Batch 1), is **idempotent** (removes only its own prefixed frames on
+re-run), and `figma.notify`s when done. Run them in any order; running all four gives the
+full set. Same run method as Batch 1 — point a local Claude Code at each file via `use_figma`
+against fileKey `e38OAw7xSAHMYhZksDIwjY`.
 
-Run Batch 1 first and confirm it looks right; the same patterns/helpers carry into
-2–4 (they can be generated the same way).
+- **`rewrite_redesign_batch2.js`** — remaining chat states (`Chat2 ·`): empty (Writing/Prompt),
+  assistant **typing**, **Diff** (accent additions / red-strikethrough removals), **error**,
+  **Setup card** (provider radio list + email sign-in), and **History** with the new 1.5.1
+  Writing|Prompt tab.
+- **`rewrite_redesign_batch3.js`** — Settings (`Set3 ·`): a full Claude/Anthropic window
+  (Provider radios → Connection → API steps → General toggles/hotkeys → Custom Presets →
+  Updates → Privacy), plus per-provider variants (Free models signed-out & signed-in+delete,
+  Built-in AI, Claude Code, Ollama).
+- **`rewrite_redesign_batch4.js`** — Voice + Welcome (`VW4 ·`): Voice overlay (Listening /
+  Transcribing) with the strands approximated as blurred lavender ribbons + the 24-bar
+  waveform pill, and the Welcome window (460×560) in permissions-needed and all-granted states.
+
+Suggested order: run Batch 1, eyeball it, then 2 → 3 → 4. All scripts are parse-checked
+(`node --check`). Icons are monoline SF-Symbol approximations; the live voice shader is a
+static stand-in.
