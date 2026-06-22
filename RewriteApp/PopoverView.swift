@@ -79,8 +79,8 @@ struct PopoverView: View {
         }
         .frame(width: 380, height: 668)
         .ambientBackground()
-        .onAppear { autoFillFromClipboard(); DispatchQueue.main.async { composerFocused = true } }
-        .onChange(of: settings.mode) { _, _ in selectedAction = nil; composerMode = .text; showSelectPrompt = false }
+        .onAppear { autoFillFromClipboard(); injectWhatsNewIfNeeded(); DispatchQueue.main.async { composerFocused = true } }
+        .onChange(of: settings.mode) { _, _ in selectedAction = nil; composerMode = .text; showSelectPrompt = false; injectWhatsNewIfNeeded() }
     }
 
     // MARK: - Header
@@ -133,7 +133,6 @@ struct PopoverView: View {
 
     private var chatPanel: some View {
         VStack(spacing: 0) {
-            if showWhatsNew { whatsNewBanner }
             threadView
             composer
         }
@@ -145,39 +144,22 @@ struct PopoverView: View {
         settings.lastSeenWhatsNewVersion != AppUpdater.shared.featureVersion
     }
 
-    /// Slim, dismissible bar pinned to the top of the chat after an update.
-    private var whatsNewBanner: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.accent)
-            Text("What's new in \(AppUpdater.shared.featureVersion)")
-                .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.textPrimary)
-            Spacer(minLength: 6)
-            Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary)
-            Button { markWhatsNewSeen() } label: {
-                Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Theme.textSecondary).frame(width: 22, height: 22)
-            }.buttonStyle(.plain).help("Dismiss")
-        }
-        .padding(.horizontal, 14).padding(.vertical, 9)
-        .background(Theme.accent.opacity(0.10))
-        .overlay(alignment: .bottom) { Rectangle().fill(Theme.fillTranslucent.opacity(0.08)).frame(height: 1) }
-        .contentShape(Rectangle())
-        .onTapGesture { openWhatsNew() }
-    }
-
-    private func openWhatsNew() {
-        markWhatsNewSeen()
-        if !thread.contains(where: { $0.role == .whatsNew }) {
-            thread.append(ChatTurn(role: .whatsNew, text: ""))
-        }
+    /// After a feature update, drop the full What's New card straight into the
+    /// conversation (top of the thread) so it's seen in the chat — not behind a
+    /// banner. Runs on appear and on mode switch; no-ops once seen or already present.
+    private func injectWhatsNewIfNeeded() {
+        guard showWhatsNew, !thread.contains(where: { $0.role == .whatsNew }) else { return }
+        thread.insert(ChatTurn(role: .whatsNew, text: ""), at: 0)
     }
 
     private func markWhatsNewSeen() {
         settings.lastSeenWhatsNewVersion = AppUpdater.shared.featureVersion
     }
 
+    /// Dismiss clears the card from every mode's thread and marks the feature
+    /// line seen, so it won't re-inject in either tab until the next update.
     private func dismissWhatsNew(_ id: UUID) {
-        thread.removeAll { $0.id == id }
+        for m in RewriteMode.allCases { threadByMode[m]?.removeAll { $0.role == .whatsNew } }
         markWhatsNewSeen()
     }
 
@@ -833,7 +815,7 @@ struct WhatsNewCardView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "sparkles").font(.system(size: 14)).foregroundStyle(Theme.accent)
-                Text("What's new in \(AppUpdater.shared.featureVersion)")
+                Text("What's new in \(AppUpdater.shared.currentVersion)")
                     .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.textPrimary)
                 Spacer()
                 Button { onDismiss() } label: {
