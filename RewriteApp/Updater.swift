@@ -24,4 +24,11 @@ final class AppUpdater {
     var currentVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
+
+    /// "1.4.2" -> "1.4" — the feature line the What's New tour keys off, so it
+    /// shows once per feature release and not on every minor patch.
+    var featureVersion: String {
+        let p = currentVersion.split(separator: ".")
+        return p.count >= 2 ? "\(p[0]).\(p[1])" : currentVersion
+    }
 }

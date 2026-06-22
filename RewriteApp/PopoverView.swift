@@ -131,14 +131,14 @@ struct PopoverView: View {
     // MARK: - What's new
 
     private var showWhatsNew: Bool {
-        settings.lastSeenWhatsNewVersion != AppUpdater.shared.currentVersion
+        settings.lastSeenWhatsNewVersion != AppUpdater.shared.featureVersion
     }
 
     /// Slim, dismissible bar pinned to the top of the chat after an update.
     private var whatsNewBanner: some View {
         HStack(spacing: 9) {
             Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.accent)
-            Text("What's new in \(AppUpdater.shared.currentVersion)")
+            Text("What's new in \(AppUpdater.shared.featureVersion)")
                 .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.textPrimary)
             Spacer(minLength: 6)
             Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.textSecondary)
@@ -162,7 +162,7 @@ struct PopoverView: View {
     }
 
     private func markWhatsNewSeen() {
-        settings.lastSeenWhatsNewVersion = AppUpdater.shared.currentVersion
+        settings.lastSeenWhatsNewVersion = AppUpdater.shared.featureVersion
     }
 
     private func dismissWhatsNew(_ id: UUID) {
@@ -799,7 +799,7 @@ struct WhatsNewCardView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "sparkles").font(.system(size: 14)).foregroundStyle(Theme.accent)
-                Text("What's new in \(AppUpdater.shared.currentVersion)")
+                Text("What's new in \(AppUpdater.shared.featureVersion)")
                     .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.textPrimary)
                 Spacer()
                 Button { onDismiss() } label: {
