@@ -828,14 +828,14 @@ struct WhatsNewCardView: View {
     }
 
     private let highlights: [Highlight] = [
-        .init(icon: "rectangle.split.2x1", title: "Writing & Prompt, kept apart",
-              blurb: "Each tab keeps its own conversation and history now — switching never mixes them up."),
-        .init(icon: "wand.and.stars", title: "Just hit send",
-              blurb: "Send without picking a style and Rewrite fixes grammar and polishes for you — Prompt mode optimizes."),
-        .init(icon: "lock.shield", title: "Your data, your call",
-              blurb: "Sign-in stays optional, and you can delete your account and data anytime from Settings."),
-        .init(icon: "text.bubble", title: "What's new, right here",
-              blurb: "Release notes now land straight in the chat — no extra windows to chase.")
+        .init(icon: "arrow.up.and.down.and.arrow.left.and.right", title: "Pop it out anywhere",
+              blurb: "Drag the window off the menu bar and drop it wherever you like — it stays put."),
+        .init(icon: "mic.fill", title: "Dictation stays open",
+              blurb: "Start talking and the window floats — clicking away or switching apps won't dismiss it."),
+        .init(icon: "waveform", title: "Smoother dictation",
+              blurb: "Pause and keep going — your earlier words are no longer cleared."),
+        .init(icon: "xmark.circle", title: "Close + Settings",
+              blurb: "A new ✕ closes the window; Settings moved to the menu-bar icon's menu.")
     ]
 
     var body: some View {
