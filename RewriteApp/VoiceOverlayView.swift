@@ -28,6 +28,14 @@ struct VoiceOverlayView: View {
                 .opacity(0).frame(width: 0, height: 0)
         }
         .frame(width: 380, height: 668)
+        // Close the whole window (dismiss the floating panel) — mirrors the chat
+        // header's ✕. The bottom pill's ✕ only cancels the dictation itself.
+        .overlay(alignment: .topTrailing) {
+            IconButton(systemName: "xmark", help: "Close") {
+                NotificationCenter.default.post(name: .rewriteCloseWindow, object: nil)
+            }
+            .padding(14)
+        }
     }
 
     // MARK: Strands

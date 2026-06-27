@@ -869,9 +869,6 @@ struct WhatsNewCardView: View {
                     }
                 }
             }
-
-            Button { onDismiss() } label: { Text("Try it") }
-                .buttonStyle(InstrumentButtonStyle(prominent: true))
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
