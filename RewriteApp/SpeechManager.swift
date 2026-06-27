@@ -5,6 +5,14 @@ import AppKit
 
 /// Live voice-to-text using Apple's Speech framework. Transcribed text is
 /// published as it comes in so the UI can stream it into the input box.
+///
+/// Continuity across pauses: the on-device `SFSpeechRecognizer` does NOT report
+/// `isFinal` when the speaker pauses — it silently *resets* its running
+/// transcription in place, so the next partial contains only the post-pause
+/// words. To avoid clearing earlier dictation we keep a monotonic `committed`
+/// buffer and, whenever we detect that reset, fold the prior phrase into it
+/// before the new partial overwrites the live segment. Only the user pressing
+/// Done (`stop()`) finalizes; text is never lost except on a brand-new session.
 @MainActor
 final class SpeechManager: ObservableObject {
     @Published var isRecording = false
@@ -18,13 +26,21 @@ final class SpeechManager: ObservableObject {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
 
-    /// Text from recognition segments that have already finalized. The live
-    /// `transcript` is always `committed` + the current segment's partial, so a
-    /// pause (which finalizes a segment) never clears earlier dictation.
+    /// Text from segments that are already locked in (a prior request finalized,
+    /// or we detected the recognizer reset its hypothesis on a pause). Only grows
+    /// until the user stops.
     private var committed = ""
-    /// Guards against a tight restart loop if the recognizer keeps failing with
-    /// no new speech in between.
-    private var emptyRestarts = 0
+    /// The current request's live transcription. `transcript` is always
+    /// `committed` joined with `segment`. `formattedString` always REPLACES this
+    /// (never appends), so in-place word revisions ("their"→"there") are clean.
+    private var segment = ""
+    /// Bumped on every `beginTask()`. A recognition callback captures its
+    /// generation and bails if it no longer matches, so a stale callback from a
+    /// superseded/cancelled task can never corrupt the live request's state.
+    private var generation = 0
+    /// Consecutive recognition errors with no recognized words; caps restarts so
+    /// a persistently failing recognizer can't spin forever.
+    private var errorRestarts = 0
 
     /// Toggles dictation. Resolves authorization on first use.
     func toggle() {
@@ -62,8 +78,9 @@ final class SpeechManager: ObservableObject {
 
         errorMessage = nil
         committed = ""
+        segment = ""
         transcript = ""
-        emptyRestarts = 0
+        errorRestarts = 0
         playChime("Tink")
 
         let inputNode = audioEngine.inputNode
@@ -87,11 +104,22 @@ final class SpeechManager: ObservableObject {
     }
 
     /// Starts a recognition request + task on the already-running audio engine.
-    /// Used for the first segment and to resume after a pause/finalize, so
-    /// dictation keeps going until the user explicitly stops. The mic tap appends
-    /// to `self.request`, so swapping the request needs no re-tap.
+    /// Used for the first segment and to resume after the ~1-min on-device cap or
+    /// an error, so dictation continues until the user explicitly stops. The mic
+    /// tap appends to `self.request`, so swapping the request needs no re-tap.
     private func beginTask() {
         guard let recognizer else { return }
+
+        // Supersede any previous request/task. Bumping the generation first means
+        // a late callback from the old task sees a stale generation and bails,
+        // so cancelling here can't race the new request's state.
+        generation &+= 1
+        let myGeneration = generation
+        task?.cancel()
+        request?.endAudio()
+        request = nil
+        task = nil
+        segment = ""
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
@@ -104,29 +132,30 @@ final class SpeechManager: ObservableObject {
 
         task = recognizer.recognitionTask(with: request) { [weak self] result, error in
             Task { @MainActor in
-                guard let self, self.isRecording else { return }
+                guard let self, self.isRecording, myGeneration == self.generation else { return }
 
                 if let result {
-                    let partial = result.bestTranscription.formattedString
-                    self.transcript = self.committed.isEmpty
-                        ? partial
-                        : (partial.isEmpty ? self.committed : self.committed + " " + partial)
-                    if !partial.isEmpty { self.emptyRestarts = 0 }
+                    let incoming = result.bestTranscription.formattedString
+                    // The on-device recognizer resets its hypothesis in place after
+                    // a pause (no isFinal): the partial drops to a fresh utterance
+                    // that no longer overlaps what we had. Fold the prior phrase
+                    // into `committed` BEFORE adopting the new one, so a pause never
+                    // erases earlier dictation.
+                    if self.isReset(prev: self.segment, next: incoming) {
+                        self.foldSegment()
+                    }
+                    self.segment = incoming
+                    self.transcript = self.joinedTranscript()
+                    if !incoming.isEmpty { self.errorRestarts = 0 }
                 }
 
-                // A finalized segment (pause/silence or the ~1-min on-device cap) or
-                // a benign error ends THIS request, not the session: fold the segment
-                // into `committed` and listen again so earlier dictation is kept.
+                // A real final result (e.g. the ~1-min cap) or an error ends THIS
+                // request, not the session: lock in what we have and listen again.
                 if (result?.isFinal ?? false) || error != nil {
-                    self.committed = self.transcript
-                    self.request?.endAudio()
-                    self.request = nil
-                    self.task = nil
-                    // Repeated failures with no new words → recognizer is likely
-                    // unavailable; stop instead of spinning.
-                    if error != nil && self.transcript.isEmpty {
-                        self.emptyRestarts += 1
-                        if self.emptyRestarts >= 3 {
+                    self.foldSegment()
+                    if error != nil {
+                        self.errorRestarts += 1
+                        if self.errorRestarts >= 4 {
                             self.errorMessage = "Dictation stopped unexpectedly. Try again."
                             self.stop()
                             return
@@ -140,6 +169,13 @@ final class SpeechManager: ObservableObject {
 
     func stop() {
         let wasRecording = isRecording
+        // Lock in any in-flight words BEFORE teardown so pressing Done never drops
+        // the last partial. Bump the generation so trailing callbacks bail.
+        if wasRecording {
+            generation &+= 1
+            foldSegment()
+            transcript = committed
+        }
         audioEngine.inputNode.removeTap(onBus: 0)
         if audioEngine.isRunning { audioEngine.stop() }
         request?.endAudio()
@@ -149,6 +185,48 @@ final class SpeechManager: ObservableObject {
         isRecording = false
         level = 0
         if wasRecording { playChime("Pop") }
+    }
+
+    // MARK: - Segment accumulation
+
+    /// `committed` joined with the live `segment`, single space only when both
+    /// sides are non-empty.
+    private func joinedTranscript() -> String {
+        if committed.isEmpty { return segment }
+        if segment.isEmpty { return committed }
+        return committed + " " + segment
+    }
+
+    /// Locks the current `segment` into `committed` and clears it. Idempotent, and
+    /// skips a re-fold of identical text so a double call can't duplicate.
+    private func foldSegment() {
+        let trimmed = segment.trimmingCharacters(in: .whitespacesAndNewlines)
+        segment = ""
+        guard !trimmed.isEmpty else { return }
+        if committed == trimmed || committed.hasSuffix(" " + trimmed) {
+            transcript = committed
+            return
+        }
+        committed = committed.isEmpty ? trimmed : committed + " " + trimmed
+        transcript = committed
+    }
+
+    /// Is `next` a fresh utterance (the recognizer reset) rather than a revision
+    /// or extension of `prev`? Growth/in-place revisions share a prefix or keep
+    /// most words; a reset drops to empty or to words that barely overlap. Word-
+    /// overlap (not raw length / first-word) avoids false positives on revisions
+    /// like "their car is" → "there car is fast", which would otherwise duplicate.
+    private func isReset(prev: String, next: String) -> Bool {
+        let p = prev.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !p.isEmpty else { return false }
+        let n = next.trimmingCharacters(in: .whitespacesAndNewlines)
+        if n.isEmpty { return true }
+        if n.hasPrefix(p) || p.hasPrefix(n) { return false }   // growth or revision
+        let prevWords = p.lowercased().split(separator: " ")
+        guard prevWords.count >= 2 else { return false }       // single word → just a revision
+        let nextWords = Set(n.lowercased().split(separator: " "))
+        let overlap = prevWords.filter { nextWords.contains($0) }.count
+        return Double(overlap) / Double(prevWords.count) < 0.5
     }
 
     /// Computes a smoothed amplitude from the live mic buffer (audio thread → main).
