@@ -39,8 +39,10 @@ enum Theme {
 
     /// Muted lavender / periwinkle accent, used sparingly.
     static let accent    = Color(nsColor: .dynamic(light: "#7C78E8", dark: "#A7A4F5"))
-    /// Ink that sits on top of an accent-filled element (white on lavender).
-    static let accentInk = Color(nsColor: NSColor(hex: "#FFFFFF"))
+    /// Ink on top of an accent-filled element. Dynamic so it stays readable: white
+    /// on the deeper light-mode accent, dark on the pale dark-mode lavender (the
+    /// old pure-white failed contrast on the light lavender).
+    static let accentInk = Color(nsColor: .dynamic(light: "#FFFFFF", dark: "#1B1726"))
     static let ledFail   = Color(nsColor: .dynamic(light: "#E5483B", dark: "#FF6B5E"))
 
     /// White in dark mode, black in light mode. Apply at a low opacity so the
