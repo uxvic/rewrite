@@ -18,6 +18,14 @@ final class SpeechManager: ObservableObject {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
 
+    /// Text from recognition segments that have already finalized. The live
+    /// `transcript` is always `committed` + the current segment's partial, so a
+    /// pause (which finalizes a segment) never clears earlier dictation.
+    private var committed = ""
+    /// Guards against a tight restart loop if the recognizer keeps failing with
+    /// no new speech in between.
+    private var emptyRestarts = 0
+
     /// Toggles dictation. Resolves authorization on first use.
     func toggle() {
         if isRecording {
@@ -45,6 +53,7 @@ final class SpeechManager: ObservableObject {
         }
     }
 
+    /// Starts a fresh, user-initiated dictation session (clears any prior text).
     private func start() {
         guard let recognizer, recognizer.isAvailable else {
             errorMessage = "Speech recognizer is not available right now."
@@ -52,17 +61,10 @@ final class SpeechManager: ObservableObject {
         }
 
         errorMessage = nil
+        committed = ""
         transcript = ""
+        emptyRestarts = 0
         playChime("Tink")
-
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        // Keep dictation fully on-device when the recognizer supports it (true on
-        // macOS 14+ for en-US), so transcription never leaves the Mac.
-        if recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true
-        }
-        self.request = request
 
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
@@ -81,14 +83,56 @@ final class SpeechManager: ObservableObject {
         }
 
         isRecording = true
+        beginTask()
+    }
+
+    /// Starts a recognition request + task on the already-running audio engine.
+    /// Used for the first segment and to resume after a pause/finalize, so
+    /// dictation keeps going until the user explicitly stops. The mic tap appends
+    /// to `self.request`, so swapping the request needs no re-tap.
+    private func beginTask() {
+        guard let recognizer else { return }
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        // Keep dictation fully on-device when the recognizer supports it (true on
+        // macOS 14+ for en-US), so transcription never leaves the Mac.
+        if recognizer.supportsOnDeviceRecognition {
+            request.requiresOnDeviceRecognition = true
+        }
+        self.request = request
+
         task = recognizer.recognitionTask(with: request) { [weak self] result, error in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.isRecording else { return }
+
                 if let result {
-                    self.transcript = result.bestTranscription.formattedString
+                    let partial = result.bestTranscription.formattedString
+                    self.transcript = self.committed.isEmpty
+                        ? partial
+                        : (partial.isEmpty ? self.committed : self.committed + " " + partial)
+                    if !partial.isEmpty { self.emptyRestarts = 0 }
                 }
-                if error != nil || (result?.isFinal ?? false) {
-                    self.stop()
+
+                // A finalized segment (pause/silence or the ~1-min on-device cap) or
+                // a benign error ends THIS request, not the session: fold the segment
+                // into `committed` and listen again so earlier dictation is kept.
+                if (result?.isFinal ?? false) || error != nil {
+                    self.committed = self.transcript
+                    self.request?.endAudio()
+                    self.request = nil
+                    self.task = nil
+                    // Repeated failures with no new words → recognizer is likely
+                    // unavailable; stop instead of spinning.
+                    if error != nil && self.transcript.isEmpty {
+                        self.emptyRestarts += 1
+                        if self.emptyRestarts >= 3 {
+                            self.errorMessage = "Dictation stopped unexpectedly. Try again."
+                            self.stop()
+                            return
+                        }
+                    }
+                    self.beginTask()
                 }
             }
         }
