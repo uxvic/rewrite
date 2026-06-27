@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 /// One message in the rewrite conversation. User turns hold the source text;
 /// assistant turns hold a rewrite (streamed in) plus the action that produced it.
@@ -79,12 +80,19 @@ struct PopoverView: View {
                         }
                     }
                 }
+                // Esc dismisses a torn-off floating window (no-op while docked).
+                .onExitCommand { NotificationCenter.default.post(name: .rewriteDismissDetached, object: nil) }
             }
         }
         .frame(width: 380, height: 668)
         .ambientBackground()
         .onAppear { autoFillFromClipboard(); injectWhatsNewIfNeeded(); DispatchQueue.main.async { composerFocused = true } }
         .onChange(of: settings.mode) { _, _ in selectedAction = nil; composerMode = .text; showSelectPrompt = false; injectWhatsNewIfNeeded() }
+        // Host is dismissing a torn-off window while dictation is live — end it
+        // cleanly so the mic is released.
+        .onReceive(NotificationCenter.default.publisher(for: .rewriteForceExitVoice)) { _ in
+            if voiceMode { cancelVoice() }
+        }
     }
 
     // MARK: - Header
@@ -109,6 +117,14 @@ struct PopoverView: View {
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 11)
+        // Drag the header to tear the window off the menu bar into a floating,
+        // movable panel. Taps on the buttons/pill still win (minimumDistance).
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 8)
+                .onChanged { _ in NotificationCenter.default.post(name: .rewriteWindowDragChanged, object: nil) }
+                .onEnded { _ in NotificationCenter.default.post(name: .rewriteWindowDragEnded, object: nil) }
+        )
     }
 
     /// Soft segmented WRITING / PROMPT pill, bound to any mode selection so it can
@@ -664,19 +680,24 @@ struct PopoverView: View {
     private func enterVoiceMode() {
         if !speech.isRecording { speech.toggle() }
         voiceMode = true
+        // Dictation must stay on screen even if the user clicks away or switches
+        // apps — ask the host to detach into a persistent floating panel.
+        NotificationCenter.default.post(name: .rewriteVoiceActivated, object: nil)
     }
 
     private func finishVoice() {
         let captured = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         if speech.isRecording { speech.stop() }
         voiceMode = false
-        guard !captured.isEmpty else { return }
-        draft = draft.isEmpty ? captured : draft + " " + captured
+        if !captured.isEmpty { draft = draft.isEmpty ? captured : draft + " " + captured }
+        // The reused window won't re-fire .onAppear, so re-focus the composer.
+        DispatchQueue.main.async { composerFocused = true }
     }
 
     private func cancelVoice() {
         if speech.isRecording { speech.stop() }
         voiceMode = false
+        DispatchQueue.main.async { composerFocused = true }
     }
 
     // MARK: - Clipboard
