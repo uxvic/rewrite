@@ -81,7 +81,7 @@ struct PopoverView: View {
                     }
                 }
                 // Esc dismisses a torn-off floating window (no-op while docked).
-                .onExitCommand { NotificationCenter.default.post(name: .rewriteDismissDetached, object: nil) }
+                .onExitCommand { NotificationCenter.default.post(name: .rewriteCloseWindow, object: nil) }
             }
         }
         .frame(width: 380, height: 668)
@@ -92,6 +92,11 @@ struct PopoverView: View {
         // cleanly so the mic is released.
         .onReceive(NotificationCenter.default.publisher(for: .rewriteForceExitVoice)) { _ in
             if voiceMode { cancelVoice() }
+        }
+        // Opened from the menu-bar "Settings…" item.
+        .onReceive(NotificationCenter.default.publisher(for: .rewriteShowSettings)) { _ in
+            voiceMode = false
+            panel = .settings
         }
     }
 
@@ -111,9 +116,17 @@ struct PopoverView: View {
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
             }
             Spacer(minLength: 6)
-            IconButton(systemName: panel == .settings ? "chevron.left" : "gearshape",
-                       active: panel == .settings, help: "Settings") {
-                panel = (panel == .settings) ? .main : .settings
+            // Settings now lives in the menu-bar menu; this top-right control is a
+            // Close (✕) that dismisses the window — except inside Settings, where
+            // it's a Back chevron returning to the chat.
+            IconButton(systemName: panel == .settings ? "chevron.left" : "xmark",
+                       active: panel == .settings,
+                       help: panel == .settings ? "Back" : "Close") {
+                if panel == .settings {
+                    panel = .main
+                } else {
+                    NotificationCenter.default.post(name: .rewriteCloseWindow, object: nil)
+                }
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 11)
