@@ -53,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         nc.addObserver(self, selector: #selector(voiceActivated), name: .rewriteVoiceActivated, object: nil)
         nc.addObserver(self, selector: #selector(windowDragChanged), name: .rewriteWindowDragChanged, object: nil)
         nc.addObserver(self, selector: #selector(windowDragEnded), name: .rewriteWindowDragEnded, object: nil)
-        nc.addObserver(self, selector: #selector(dismissDetached), name: .rewriteDismissDetached, object: nil)
+        nc.addObserver(self, selector: #selector(closeWindow), name: .rewriteCloseWindow, object: nil)
 
         _ = AppUpdater.shared   // starts Sparkle + scheduled checks
 
@@ -109,6 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         guard let button = statusItem.button else { return }
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Rewrite", action: #selector(togglePopover(_:)), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Welcome / Help", action: #selector(showWelcome), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
@@ -302,8 +303,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     @objc private func windowDragEnded() { stopDragFollow() }
 
-    @objc private func dismissDetached() {
-        if detachedPanel != nil { redock() }
+    /// The header ✕ / Esc: dismiss whatever surface is showing.
+    @objc private func closeWindow() {
+        if detachedPanel != nil { redock() } else { closePopover() }
+    }
+
+    /// Menu-bar "Settings…": make sure a window is showing, then switch it to the
+    /// Settings panel.
+    @objc private func openSettings() {
+        if let panel = detachedPanel {
+            NSApp.activate(ignoringOtherApps: true)
+            panel.makeKeyAndOrderFront(nil)
+        } else if !popover.isShown {
+            showPopover()
+        }
+        NotificationCenter.default.post(name: .rewriteShowSettings, object: nil)
     }
 
     // MARK: - Rewrite selection in place (anywhere)
@@ -361,7 +375,8 @@ extension Notification.Name {
     static let rewriteVoiceActivated   = Notification.Name("RewriteVoiceActivated")
     static let rewriteWindowDragChanged = Notification.Name("RewriteWindowDragChanged")
     static let rewriteWindowDragEnded   = Notification.Name("RewriteWindowDragEnded")
-    static let rewriteDismissDetached   = Notification.Name("RewriteDismissDetached")
+    static let rewriteCloseWindow       = Notification.Name("RewriteCloseWindow")
+    static let rewriteShowSettings      = Notification.Name("RewriteShowSettings")
     static let rewriteForceExitVoice    = Notification.Name("RewriteForceExitVoice")
 }
 
