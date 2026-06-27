@@ -28,7 +28,6 @@ struct VoiceOverlayView: View {
                 .opacity(0).frame(width: 0, height: 0)
         }
         .frame(width: 380, height: 668)
-        .onDisappear { speech.stop() }   // safety: never leave the mic running
     }
 
     // MARK: Strands
