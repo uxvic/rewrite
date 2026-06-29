@@ -560,8 +560,13 @@ struct PopoverView: View {
                 modeSegmented($historyMode, width: 200)
                 Spacer(minLength: 6)
                 if !settings.history.isEmpty {
-                    Button { settings.history = [] } label: { Text("Clear") }
-                        .buttonStyle(InstrumentButtonStyle()).controlSize(.mini)
+                    Button { settings.history = [] } label: {
+                        Text("Clear")
+                            .font(.system(size: 12.5)).foregroundStyle(Theme.textPrimary)
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .glassFloat(Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 16).padding(.vertical, 8)
