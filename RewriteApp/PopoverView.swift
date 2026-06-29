@@ -41,7 +41,9 @@ struct PopoverView: View {
     @StateObject private var speech = SpeechManager()
 
     @State private var threadByMode: [RewriteMode: [ChatTurn]] = [:]
-    @State private var draftByMode: [RewriteMode: String] = [:]
+    // The draft is shared across modes (so a half-typed message survives a
+    // Writing↔Prompt switch); only the conversations stay divided by mode.
+    @State private var draft: String = ""
     @State private var composerMode: ComposerMode = .text
     @State private var selectedAction: SelectedAction?
     @State private var pendingRetry: PendingRun?
@@ -68,10 +70,6 @@ struct PopoverView: View {
     private var thread: [ChatTurn] {
         get { threadByMode[settings.mode] ?? [] }
         nonmutating set { threadByMode[settings.mode] = newValue }
-    }
-    private var draft: String {
-        get { draftByMode[settings.mode] ?? "" }
-        nonmutating set { draftByMode[settings.mode] = newValue }
     }
 
     var body: some View {
@@ -212,6 +210,7 @@ struct PopoverView: View {
                     Color.clear.frame(height: 1).id("bottom")
                 }
                 .padding(16)
+                .background(OverlayScrollers())
             }
             .frame(maxHeight: .infinity)
             .onChange(of: thread) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
@@ -556,7 +555,8 @@ struct PopoverView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(items) { historyRow($0) }
                     }
-                    .padding(.vertical, 2)
+                    .padding(.top, 2).padding(.bottom, 16)
+                    .background(OverlayScrollers())
                 }
             }
         }
@@ -575,7 +575,7 @@ struct PopoverView: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .module(Theme.panel)
+            .glassFloat(RoundedRectangle(cornerRadius: Metric.cardRadius, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -947,6 +947,21 @@ final class ComposerScrollView: NSScrollView {
         let used = lm.usedRect(for: tc).height
         let h = min(max(used, line), line * CGFloat(maxLines))
         return NSSize(width: NSView.noIntrinsicMetric, height: ceil(h))
+    }
+}
+
+/// Forces the enclosing SwiftUI `ScrollView`'s underlying NSScrollView to use thin
+/// overlay scrollers (appear only while scrolling, then fade) instead of the wide
+/// always-on bar — regardless of the system "show scroll bars" setting.
+struct OverlayScrollers: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ v: NSView, context: Context) {
+        DispatchQueue.main.async {
+            guard let s = v.enclosingScrollView else { return }
+            s.scrollerStyle = .overlay
+            s.hasHorizontalScroller = false
+            s.autohidesScrollers = true
+        }
     }
 }
 
