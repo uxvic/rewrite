@@ -537,15 +537,7 @@ struct PopoverView: View {
 
     private var historyPanel: some View {
         let items = settings.history.filter { $0.mode == historyMode }
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                modeSegmented($historyMode, width: 200)
-                Spacer(minLength: 6)
-                if !settings.history.isEmpty {
-                    Button { settings.history = [] } label: { Text("Clear") }
-                        .buttonStyle(InstrumentButtonStyle()).controlSize(.mini)
-                }
-            }
+        return Group {
             if items.isEmpty {
                 Text("No \(historyMode.title.capitalized) rewrites yet.")
                     .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
@@ -555,13 +547,25 @@ struct PopoverView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(items) { historyRow($0) }
                     }
-                    .padding(.top, 2).padding(.bottom, 16)
+                    .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16)
                     .background(OverlayScrollers())
                 }
             }
         }
-        .padding(16)
         .frame(maxHeight: .infinity)
+        // The filter row floats as glass and the rows scroll UNDER it (and the
+        // header), so there's no solid band at the top — same as the chat.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack {
+                modeSegmented($historyMode, width: 200)
+                Spacer(minLength: 6)
+                if !settings.history.isEmpty {
+                    Button { settings.history = [] } label: { Text("Clear") }
+                        .buttonStyle(InstrumentButtonStyle()).controlSize(.mini)
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 8)
+        }
         .onAppear { historyMode = settings.mode }
     }
 
