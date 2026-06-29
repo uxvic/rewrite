@@ -106,26 +106,51 @@ enum RewriteAction: String, CaseIterable, Identifiable {
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    // MARK: - Smart intent (used by the auto "Smart" plain-send path)
+    // MARK: - Smart intent (the auto "Smart" plain-send path)
 
-    /// Decides whether a plain send is text to polish or a request to fulfill.
-    static let classifySystemPrompt = """
-    You are an intent classifier for a writing app. Read the user's message and decide which it is:
-    - REWRITE — a piece of text the user wants polished or transformed (an email, message, paragraph, \
-    note), even if rough, rambling, or dictated.
-    - REQUEST — an instruction asking you to PRODUCE or DO something, e.g. "draft an email about…", \
-    "reply to this", "summarise this", "write a tweet…", "help me write…".
-    If you are unsure, answer REWRITE.
-    Reply with exactly one word: REWRITE or REQUEST.
+    /// Single decide-and-act prompt for Smart sends: the model itself decides
+    /// whether the message is text to polish or a request to fulfill, does it,
+    /// and self-tags its reply so we can label the turn. One call, no brittle
+    /// separate classifier — the same capable model that drafts also decides.
+    static let smartSystemPrompt = """
+    You are a writing assistant inside a menu-bar app. Read the user's message and do EXACTLY ONE of \
+    these:
+    - If it is a piece of text to clean up (an email, message, paragraph, or note — even if rough, \
+    rambling, or dictated), polish it: fix grammar, spelling and punctuation and lightly improve \
+    clarity and flow WITHOUT changing its meaning, tone, or language.
+    - If it is a request or instruction asking you to PRODUCE or DO something (e.g. "draft an email \
+    about…", "reply to this", "summarise this", "write a tweet…", "help me write…"), carry it out \
+    and write the finished text the user can paste.
+
+    Begin your reply with a tag on its very first line, by itself: [REWRITE] if you polished existing \
+    text, or [REQUEST] if you produced something. Then put the result on the following lines. Output \
+    ONLY that tag line and the result — no preamble, no quotes, no explanation. Preserve the user's \
+    language.
     """
 
-    /// Fulfills a request (the Smart path's REQUEST branch). Unlike the rewrite
-    /// prompts, it is allowed to actually produce the asked-for text.
-    static let assistantSystemPrompt = """
-    You are a helpful writing assistant inside a menu-bar app. The user is asking you to produce \
-    something — for example draft an email, write a message, reply, or summarise. Fulfill the request \
-    directly and return ONLY the finished text the user can paste: no preamble, no explanation, and no \
-    surrounding quotes. Use a natural tone for the task unless the user specifies one. Preserve the \
-    user's language.
-    """
+    /// Parses a Smart reply's leading [REWRITE]/[REQUEST] tag. Returns the turn
+    /// label ("Improve"/"Request") once resolvable, plus the body with the tag
+    /// stripped. While only a partial leading tag has arrived, `body` is empty so
+    /// the bubble stays on typing-dots (no tag flicker); if the model ignored the
+    /// format entirely, returns `(nil, raw)` so the text still shows.
+    static func parseSmart(_ raw: String) -> (label: String?, body: String) {
+        let s = String(raw.drop { $0 == " " || $0 == "\n" || $0 == "\t" })
+        let upper = s.uppercased()
+        if upper.hasPrefix("[REWRITE]") {
+            return ("Improve", smartBody(s, after: "[REWRITE]"))
+        }
+        if upper.hasPrefix("[REQUEST]") {
+            return ("Request", smartBody(s, after: "[REQUEST]"))
+        }
+        // A leading bracket tag is still streaming in — withhold to avoid flicker.
+        if s.hasPrefix("[") && s.count < 9 && !s.contains(where: { $0 == "\n" }) {
+            return (nil, "")
+        }
+        // No tag at all (model didn't follow the format) — show as-is.
+        return (nil, raw.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private static func smartBody(_ s: String, after tag: String) -> String {
+        String(s.dropFirst(tag.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }

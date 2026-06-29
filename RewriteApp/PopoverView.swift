@@ -19,6 +19,11 @@ struct ChatTurn: Identifiable, Equatable {
     /// Smart "Request" turns fulfill an instruction rather than rewrite text, so
     /// they must NOT be re-wrapped on retry and a source/result diff is meaningless.
     var fulfillsRequest: Bool = false
+    /// A Smart (decide-and-act) turn. Drives tag-stripping while streaming and lets
+    /// Retry re-run the Smart pass. `rawText` accumulates the raw tagged stream so
+    /// the [REWRITE]/[REQUEST] tag can be parsed incrementally; `text` stays clean.
+    var isSmart: Bool = false
+    var rawText: String = ""
 }
 
 /// What the composer's text means when sent: new source text, or a one-off
@@ -29,7 +34,7 @@ enum ComposerMode { case text, instruction }
 struct SelectedAction: Equatable { let id: String; let systemPrompt: String; let label: String }
 
 /// A run to re-attempt after the user finishes provider setup in the chat.
-struct PendingRun: Equatable { let systemPrompt: String; let label: String; let source: String }
+struct PendingRun: Equatable { let systemPrompt: String; let label: String; let source: String; var smart: Bool = false }
 
 struct PopoverView: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -319,7 +324,8 @@ struct PopoverView: View {
             miniButton("arrow.up", "Use") { draft = turn.text; composerMode = .text }
             miniButton("arrow.clockwise", "Retry") {
                 run(systemPrompt: turn.systemPrompt, label: turn.actionLabel,
-                    variation: true, source: turn.sourceText, wrap: !turn.fulfillsRequest)
+                    variation: true, source: turn.sourceText,
+                    wrap: !turn.fulfillsRequest, smart: turn.isSmart)
             }
             // A source/result diff only makes sense for rewrites, not fulfilled requests.
             if !turn.fulfillsRequest {
@@ -474,6 +480,14 @@ struct PopoverView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1...4)
                 .focused($composerFocused)
+                // Enter sends; Shift+Enter inserts a newline. (The field is
+                // multi-line, so a plain Return would otherwise just add a line.)
+                .onKeyPress(.return) { press in
+                    if press.modifiers.contains(.shift) { return .ignored }
+                    if isLoading || draftIsEmpty { return .ignored }
+                    sendDraft()
+                    return .handled
+                }
                 .padding(.leading, 10)
                 .padding(.vertical, 4)
             if isLoading {
@@ -588,11 +602,11 @@ struct PopoverView: View {
             run(systemPrompt: RewriteAction.customSystemPrompt(t), label: "Custom: \(t)")
             return
         }
-        // Smart plain send (Writing, no explicit action): classify the input as
-        // text to polish vs. a request to fulfill, then act on that.
+        // Smart plain send (Writing, no explicit action): one decide-and-act pass
+        // that polishes text or fulfills a request, labeled once it self-tags.
         if selectedAction == nil && settings.mode == .writing && settings.smartIntent {
             addUserTurn(t)
-            runSmart(text: t)
+            run(systemPrompt: "", label: "Improve", smart: true)
             return
         }
         // No explicit action picked → apply the mode's sensible default
@@ -618,46 +632,76 @@ struct PopoverView: View {
         draft = ""; fromClipboard = false; showSelectPrompt = false
     }
 
+    /// Runs an action against the source text. When `smart` is set this is a Smart
+    /// decide-and-act pass: the model both decides (polish vs. fulfill) and acts in
+    /// one call, self-tagging its reply so the turn can be labeled (see streamBody).
     private func run(systemPrompt: String, label: String, variation: Bool = false,
-                     source: String? = nil, wrap: Bool = true) {
+                     source: String? = nil, wrap: Bool = true, smart: Bool = false) {
         let src = (source ?? latestUserText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !src.isEmpty else { return }
         let runMode = settings.mode   // tag history with the mode this rewrite belongs to
         currentTask?.cancel()
         isLoading = true
 
+        // Smart uses its own single prompt and never wraps (it may legitimately
+        // "answer" a request); the label is provisional until the tag resolves.
+        let prompt = smart ? RewriteAction.smartSystemPrompt : systemPrompt
         let turn = ChatTurn(role: .assistant, text: "", actionLabel: label,
-                            systemPrompt: systemPrompt, isStreaming: true, sourceText: src,
-                            fulfillsRequest: !wrap)
+                            systemPrompt: prompt, isStreaming: true, sourceText: src,
+                            fulfillsRequest: !wrap && !smart, isSmart: smart)
         let id = turn.id
         thread.append(turn)
 
         let provider = settings.makeProvider()
-        var payload = wrap ? RewriteAction.wrap(src) : src
+        var payload = (wrap && !smart) ? RewriteAction.wrap(src) : src
         if variation { payload += "\n\n(Give a noticeably different alternative version.)" }
 
         currentTask = Task {
             await streamBody(turnID: id, src: src, payload: payload,
-                             systemPrompt: systemPrompt, label: label,
-                             runMode: runMode, provider: provider)
+                             systemPrompt: prompt, label: label,
+                             runMode: runMode, provider: provider, parseSmartTag: smart)
         }
     }
 
     /// Streams a provider response into an existing assistant turn, sharing the
-    /// success / cancel / setup-card / error handling between `run` and the
-    /// Smart path. The turn must already be appended to `thread`.
+    /// success / cancel / setup-card / error handling across every path. When
+    /// `parseSmartTag` is set, the raw reply is accumulated in `rawText` and its
+    /// leading [REWRITE]/[REQUEST] tag is stripped (and mapped to the turn label)
+    /// as it streams, so `text` always holds clean, paste-ready output.
     private func streamBody(turnID id: UUID, src: String, payload: String,
                             systemPrompt: String, label: String,
-                            runMode: RewriteMode, provider: any RewriteProvider) async {
+                            runMode: RewriteMode, provider: any RewriteProvider,
+                            parseSmartTag: Bool = false) async {
         do {
             let raw = try await provider.stream(text: payload, systemPrompt: systemPrompt) { piece in
-                Task { @MainActor in mutateTurn(id) { $0.text += piece } }
+                Task { @MainActor in
+                    if parseSmartTag {
+                        mutateTurn(id) {
+                            $0.rawText += piece
+                            let p = RewriteAction.parseSmart($0.rawText)
+                            if let l = p.label { $0.actionLabel = l; $0.fulfillsRequest = (l == "Request") }
+                            $0.text = p.body
+                        }
+                    } else {
+                        mutateTurn(id) { $0.text += piece }
+                    }
+                }
             }
-            let result = RewriteAction.clean(raw)
+            let parsed: (label: String?, body: String) = parseSmartTag
+                ? RewriteAction.parseSmart(raw)
+                : (label: nil, body: RewriteAction.clean(raw))
+            let result = parsed.body
+            let finalLabel = parsed.label ?? label
             await MainActor.run {
-                mutateTurn(id) { $0.text = result; $0.isStreaming = false }
+                mutateTurn(id) {
+                    $0.text = result; $0.isStreaming = false
+                    if parseSmartTag {
+                        $0.actionLabel = finalLabel
+                        $0.fulfillsRequest = (parsed.label == "Request")
+                    }
+                }
                 isLoading = false
-                settings.addHistory(actionLabel: label, input: src, output: result, mode: runMode)
+                settings.addHistory(actionLabel: finalLabel, input: src, output: result, mode: runMode)
                 if settings.autoCopyResult { setClipboard(result) }
             }
         } catch {
@@ -670,7 +714,7 @@ struct PopoverView: View {
                     // Provider isn't set up — show an inline setup card instead
                     // of a raw error, and remember what to retry afterwards.
                     thread.removeAll { $0.id == id }
-                    pendingRetry = PendingRun(systemPrompt: systemPrompt, label: label, source: src)
+                    pendingRetry = PendingRun(systemPrompt: systemPrompt, label: label, source: src, smart: parseSmartTag)
                     if !thread.contains(where: { $0.role == .setup }) {
                         thread.append(ChatTurn(role: .setup, text: ""))
                     }
@@ -682,78 +726,6 @@ struct PopoverView: View {
                     }
                 }
             }
-        }
-    }
-
-    // MARK: - Smart intent (plain-send: rewrite vs. fulfill a request)
-
-    private enum Intent: Equatable { case rewrite, request }
-
-    /// Classifies a plain-send input as text to polish (`.rewrite`) or a request
-    /// to fulfill (`.request`). Defaults to `.rewrite` on any error/cancel so
-    /// Smart can never do less than today's plain default send.
-    private func classifyIntent(_ text: String, provider: any RewriteProvider) async -> Intent {
-        do {
-            let raw = try await provider.stream(text: text,
-                                                systemPrompt: RewriteAction.classifySystemPrompt,
-                                                onDelta: { _ in })
-            return raw.uppercased().contains("REQUEST") ? .request : .rewrite
-        } catch {
-            return .rewrite
-        }
-    }
-
-    /// Smart plain send: show a turn immediately, classify the intent, then either
-    /// fulfill the request (assistant prompt, raw text) or polish the text (the
-    /// Writing default, wrapped). Falls back to a rewrite on cancel/error.
-    private func runSmart(text: String) {
-        let src = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !src.isEmpty else { return }
-        let runMode = settings.mode
-        currentTask?.cancel()
-        isLoading = true
-
-        // Show the assistant turn (typing dots) right away while we classify.
-        let turn = ChatTurn(role: .assistant, text: "", actionLabel: "Improve",
-                            isStreaming: true, sourceText: src)
-        let id = turn.id
-        thread.append(turn)
-
-        let provider = settings.makeProvider()
-
-        currentTask = Task {
-            let intent = await classifyIntent(src, provider: provider)
-            if Task.isCancelled {
-                await MainActor.run {
-                    isLoading = false
-                    thread.removeAll { $0.id == id && $0.text.isEmpty }
-                }
-                return
-            }
-            let systemPrompt: String
-            let payload: String
-            let label: String
-            switch intent {
-            case .request:
-                systemPrompt = RewriteAction.assistantSystemPrompt
-                payload = src              // no wrap — wrap() forbids answering
-                label = "Request"
-            case .rewrite:
-                systemPrompt = RewriteMode.writing.defaultAction.systemPrompt
-                payload = RewriteAction.wrap(src)
-                label = "Improve"
-            }
-            let isRequest = (intent == .request)
-            await MainActor.run {
-                mutateTurn(id) {
-                    $0.actionLabel = label
-                    $0.systemPrompt = systemPrompt
-                    $0.fulfillsRequest = isRequest
-                }
-            }
-            await streamBody(turnID: id, src: src, payload: payload,
-                             systemPrompt: systemPrompt, label: label,
-                             runMode: runMode, provider: provider)
         }
     }
 
@@ -775,7 +747,7 @@ struct PopoverView: View {
         guard let p = pendingRetry else { return }
         thread.removeAll { $0.role == .setup }
         pendingRetry = nil
-        run(systemPrompt: p.systemPrompt, label: p.label, source: p.source)
+        run(systemPrompt: p.systemPrompt, label: p.label, source: p.source, smart: p.smart)
     }
 
     private func dismissSetup(_ id: UUID) {
