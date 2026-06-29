@@ -845,12 +845,12 @@ struct ComposerTextView: NSViewRepresentable {
         tv.textContainerInset = .zero
         tv.textContainer?.lineFragmentPadding = 0
         tv.minSize = NSSize(width: 0, height: 0)
-        tv.maxSize = NSSize(width: .greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         tv.isVerticallyResizable = true
         tv.isHorizontallyResizable = false
         tv.autoresizingMask = [.width]
         tv.textContainer?.widthTracksTextView = true
-        tv.textContainer?.containerSize = NSSize(width: 0, height: .greatestFiniteMagnitude)
+        tv.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
         tv.onFocusChange = onFocusChange
 
         let scroll = ComposerScrollView()
