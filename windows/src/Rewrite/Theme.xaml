@@ -1,0 +1,31 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:v="clr-namespace:Rewrite.Views">
+
+    <!-- Palette (ported from DesignSystem.swift, dark) -->
+    <SolidColorBrush x:Key="Accent" Color="#A7A4F5" />
+    <SolidColorBrush x:Key="AccentInk" Color="#1B1726" />
+    <SolidColorBrush x:Key="TextPrimary" Color="#F2F3F7" />
+    <SolidColorBrush x:Key="TextSecondary" Color="#9A9AA6" />
+    <!-- Frosted-glass fills layered over the window's acrylic blur -->
+    <SolidColorBrush x:Key="GlassFill" Color="#26FFFFFF" />
+    <SolidColorBrush x:Key="GlassStroke" Color="#22FFFFFF" />
+    <SolidColorBrush x:Key="UserBubble" Color="#332E2E37" />
+    <SolidColorBrush x:Key="AssistantBubble" Color="#33FFFFFF" />
+    <SolidColorBrush x:Key="ErrorBrush" Color="#FF6B5E" />
+
+    <!-- Converters -->
+    <v:EqualityMultiConverter x:Key="EqMulti" />
+    <v:UserAlignConverter x:Key="UserAlign" />
+    <v:InverseBoolConverter x:Key="InvBool" />
+    <v:InverseBoolToVisibilityConverter x:Key="InvBoolVis" />
+    <v:AndToVisibilityConverter x:Key="AndVis" />
+    <v:NonEmptyToVisibilityConverter x:Key="NonEmptyVis" />
+    <v:BoolToBrushConverter x:Key="BoolBrush" />
+    <v:SelectedToBrushConverter x:Key="SelBrush" />
+    <v:BubbleBrushConverter x:Key="BubbleBrush" />
+    <v:ErrorBrushConverter x:Key="ErrBrush" />
+    <v:ModeBrushConverter x:Key="ModeBrush" />
+    <BooleanToVisibilityConverter x:Key="BoolVis" />
+
+</ResourceDictionary>
