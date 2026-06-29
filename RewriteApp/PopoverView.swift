@@ -49,7 +49,9 @@ struct PopoverView: View {
     @State private var isLoading = false
     @State private var currentTask: Task<Void, Never>?
     @State private var copiedTurnID: UUID?
-    @FocusState private var composerFocused: Bool
+    // Reflects the composer's actual first-responder state (reported by the
+    // native input view); drives only the focus-highlight border now.
+    @State private var composerFocused: Bool = false
     @State private var voiceMode = false
     @State private var fromClipboard = false
     @State private var lastClipboardCount = -1
@@ -94,7 +96,7 @@ struct PopoverView: View {
         }
         .frame(width: 380, height: 668)
         .ambientBackground()
-        .onAppear { autoFillFromClipboard(); injectWhatsNewIfNeeded(); DispatchQueue.main.async { composerFocused = true } }
+        .onAppear { autoFillFromClipboard(); injectWhatsNewIfNeeded() }
         .onChange(of: settings.mode) { _, _ in selectedAction = nil; composerMode = .text; showSelectPrompt = false; injectWhatsNewIfNeeded() }
         // Host is dismissing a torn-off window while dictation is live — end it
         // cleanly so the mic is released.
@@ -477,16 +479,19 @@ struct PopoverView: View {
     /// Growing pill input (1→~4 lines, then scrolls) with the send button inside.
     private var composerField: some View {
         HStack(alignment: .bottom, spacing: 6) {
-            TextField(composerPlaceholder,
-                      text: Binding(get: { draft }, set: { draft = $0 }),
-                      axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13.5))
-                .foregroundStyle(Theme.textPrimary)
-                .lineLimit(1...4)
-                .focused($composerFocused)
-                .padding(.leading, 10)
-                .padding(.vertical, 4)
+            ZStack(alignment: .topLeading) {
+                if draftIsEmpty {
+                    Text(composerPlaceholder)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .allowsHitTesting(false)
+                }
+                ComposerTextView(text: Binding(get: { draft }, set: { draft = $0 }),
+                                 maxLines: 4,
+                                 onFocusChange: { composerFocused = $0 })
+            }
+            .padding(.leading, 10)
+            .padding(.vertical, 4)
             if isLoading {
                 insideButton("stop.fill") { currentTask?.cancel() }
                     .keyboardShortcut(".", modifiers: .command)
@@ -784,14 +789,12 @@ struct PopoverView: View {
         if speech.isRecording { speech.stop() }
         voiceMode = false
         if !captured.isEmpty { draft = draft.isEmpty ? captured : draft + " " + captured }
-        // The reused window won't re-fire .onAppear, so re-focus the composer.
-        DispatchQueue.main.async { composerFocused = true }
+        // The composer view is rebuilt on return from voice and re-focuses itself.
     }
 
     private func cancelVoice() {
         if speech.isRecording { speech.stop() }
         voiceMode = false
-        DispatchQueue.main.async { composerFocused = true }
     }
 
     // MARK: - Clipboard
@@ -811,6 +814,137 @@ struct PopoverView: View {
     private func setClipboard(_ s: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
+    }
+}
+
+/// Native multi-line composer input: a real NSScrollView + NSTextView so the
+/// field scrolls with the trackpad (SwiftUI's TextField(axis:) only follows the
+/// cursor). Grows from one line up to `maxLines`, then scrolls. Focus places the
+/// cursor at the end (never select-all), which also defuses the tear-off
+/// select-all. Enter is handled by SubmitKeyMonitor; Shift+Enter inserts a newline.
+struct ComposerTextView: NSViewRepresentable {
+    @Binding var text: String
+    var maxLines: Int = 4
+    var onFocusChange: (Bool) -> Void = { _ in }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeNSView(context: Context) -> ComposerScrollView {
+        let tv = ComposerNSTextView()
+        tv.delegate = context.coordinator
+        tv.string = text
+        tv.font = .systemFont(ofSize: 13.5)
+        tv.textColor = NSColor(Theme.textPrimary)
+        tv.insertionPointColor = NSColor(Theme.accent)
+        tv.drawsBackground = false
+        tv.isRichText = false
+        tv.allowsUndo = true
+        tv.isAutomaticQuoteSubstitutionEnabled = false
+        tv.isAutomaticDashSubstitutionEnabled = false
+        tv.isAutomaticTextReplacementEnabled = false
+        tv.textContainerInset = .zero
+        tv.textContainer?.lineFragmentPadding = 0
+        tv.minSize = NSSize(width: 0, height: 0)
+        tv.maxSize = NSSize(width: .greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        tv.isVerticallyResizable = true
+        tv.isHorizontallyResizable = false
+        tv.autoresizingMask = [.width]
+        tv.textContainer?.widthTracksTextView = true
+        tv.textContainer?.containerSize = NSSize(width: 0, height: .greatestFiniteMagnitude)
+        tv.onFocusChange = onFocusChange
+
+        let scroll = ComposerScrollView()
+        scroll.maxLines = maxLines
+        scroll.drawsBackground = false
+        scroll.borderType = .noBorder
+        scroll.hasVerticalScroller = false
+        scroll.hasHorizontalScroller = false
+        scroll.documentView = tv
+        // Fill the available width but hold height to the intrinsic (capped) size.
+        scroll.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        scroll.setContentHuggingPriority(.defaultHigh, for: .vertical)
+        scroll.setContentCompressionResistancePriority(.defaultHigh, for: .vertical)
+        context.coordinator.scrollView = scroll
+        context.coordinator.textView = tv
+        return scroll
+    }
+
+    func updateNSView(_ scroll: ComposerScrollView, context: Context) {
+        context.coordinator.parent = self
+        scroll.maxLines = maxLines
+        guard let tv = scroll.documentView as? ComposerNSTextView else { return }
+        tv.onFocusChange = onFocusChange
+        if tv.string != text {
+            tv.string = text
+            tv.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+        }
+        // Recompute height once SwiftUI has settled the width (so wrapping — and
+        // thus line count — is correct, e.g. for clipboard-prefilled drafts).
+        scroll.invalidateIntrinsicContentSize()
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: ComposerTextView
+        weak var scrollView: ComposerScrollView?
+        weak var textView: ComposerNSTextView?
+
+        init(_ parent: ComposerTextView) { self.parent = parent }
+
+        func textDidChange(_ notification: Notification) {
+            guard let tv = notification.object as? NSTextView else { return }
+            if parent.text != tv.string { parent.text = tv.string }
+            scrollView?.invalidateIntrinsicContentSize()
+        }
+    }
+}
+
+/// NSTextView that focuses itself when shown, never selects-all on focus (cursor
+/// to the end), and reports focus changes back to SwiftUI.
+final class ComposerNSTextView: NSTextView {
+    var onFocusChange: (Bool) -> Void = { _ in }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil else { return }
+        // Focus on appear — covers first open and the rebuild after voice/settings.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let win = self.window else { return }
+            win.makeFirstResponder(self)
+        }
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let ok = super.becomeFirstResponder()
+        if ok {
+            let end = (string as NSString).length
+            setSelectedRange(NSRange(location: end, length: 0))   // never select-all
+            DispatchQueue.main.async { [weak self] in self?.onFocusChange(true) }
+        }
+        return ok
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let ok = super.resignFirstResponder()
+        if ok { DispatchQueue.main.async { [weak self] in self?.onFocusChange(false) } }
+        return ok
+    }
+}
+
+/// Scroll view that sizes itself to its text, from one line up to `maxLines`
+/// (then it scrolls), so SwiftUI lays the composer out at the right height.
+final class ComposerScrollView: NSScrollView {
+    var maxLines: Int = 4
+
+    override var intrinsicContentSize: NSSize {
+        guard let tv = documentView as? NSTextView,
+              let lm = tv.layoutManager, let tc = tv.textContainer else {
+            return NSSize(width: NSView.noIntrinsicMetric, height: 20)
+        }
+        lm.ensureLayout(for: tc)
+        let line = lm.defaultLineHeight(for: tv.font ?? .systemFont(ofSize: 13.5))
+        let used = lm.usedRect(for: tc).height
+        let h = min(max(used, line), line * CGFloat(maxLines))
+        return NSSize(width: NSView.noIntrinsicMetric, height: ceil(h))
     }
 }
 
