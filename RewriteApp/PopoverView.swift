@@ -670,7 +670,13 @@ struct PopoverView: View {
         thread.append(turn)
 
         let provider = settings.makeProvider()
-        var payload = (wrap && !smart) ? RewriteAction.wrap(src) : src
+        // Smart sees the conversation so a follow-up is a refinement, not a new task.
+        var payload: String
+        if smart {
+            payload = smartContextPayload() ?? src
+        } else {
+            payload = wrap ? RewriteAction.wrap(src) : src
+        }
         if variation { payload += "\n\n(Give a noticeably different alternative version.)" }
 
         currentTask = Task {
@@ -678,6 +684,27 @@ struct PopoverView: View {
                              systemPrompt: prompt, label: label,
                              runMode: runMode, provider: provider, parseSmartTag: smart)
         }
+    }
+
+    /// A transcript of the conversation so far for Smart, so a follow-up is read as
+    /// a refinement/continuation of the previous answer rather than a new request.
+    /// Returns nil when there's no prior context (the lone new message → use it raw).
+    private func smartContextPayload() -> String? {
+        let turns = thread.filter {
+            ($0.role == .user || $0.role == .assistant)
+            && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        guard turns.count > 1 else { return nil }   // only the new message → no context
+        let transcript = turns
+            .map { $0.role == .user ? "User: \($0.text)" : "You: \($0.text)" }
+            .joined(separator: "\n\n")
+        return """
+        Below is the conversation so far. The final "User:" line is a new follow-up — treat it as a \
+        continuation of this conversation (typically a refinement of, or addition to, what you last \
+        wrote under "You:"), not a brand-new standalone task. Produce the updated result.
+
+        \(transcript)
+        """
     }
 
     /// Streams a provider response into an existing assistant turn, sharing the

@@ -122,6 +122,11 @@ enum RewriteAction: String, CaseIterable, Identifiable {
     about…", "reply to this", "summarise this", "write a tweet…", "help me write…"), carry it out \
     and write the finished text the user can paste.
 
+    The input may be a single message, OR the recent conversation (lines starting with "User:" and \
+    "You:") ending in a new follow-up. When it's a conversation, the final "User:" line is a follow-up \
+    — REVISE or EXTEND what you last wrote under "You:" to incorporate it (keep producing the same \
+    kind of output, e.g. the email you were drafting), rather than starting a brand-new task.
+
     Begin your reply with a tag on its very first line, by itself: [REWRITE] if you polished existing \
     text, or [REQUEST] if you produced something. Then put the result on the following lines. Output \
     ONLY that tag line and the result — no preamble, no quotes, no explanation. Preserve the user's \
