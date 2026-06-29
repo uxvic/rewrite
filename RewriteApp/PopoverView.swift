@@ -482,7 +482,9 @@ struct PopoverView: View {
                 .focused($composerFocused)
                 // Enter sends; Shift+Enter inserts a newline. (The field is
                 // multi-line, so a plain Return would otherwise just add a line.)
-                .onKeyPress(.return) { press in
+                // The Set overload passes the KeyPress so we can read modifiers;
+                // the single-key overload's action takes no argument.
+                .onKeyPress([.return]) { press in
                     if press.modifiers.contains(.shift) { return .ignored }
                     if isLoading || draftIsEmpty { return .ignored }
                     sendDraft()
