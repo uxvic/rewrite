@@ -360,13 +360,18 @@ struct PopoverView: View {
     private var actionBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
-                // Writing only: toggle whether a plain send classifies intent
-                // (rewrite vs. fulfill) before acting. Governs the default send;
-                // explicit actions below always rewrite literally.
+                // Writing only: Smart governs the plain (no-action) send. It's
+                // mutually exclusive with the explicit actions — picking one
+                // deselects the others. `smartIntent` stays the persistent default;
+                // a picked action is a per-send override that hides Smart's highlight.
                 if settings.mode == .writing {
                     selectableChip(icon: "sparkles", label: "Smart",
-                                   selected: settings.smartIntent) {
-                        settings.smartIntent.toggle()
+                                   selected: settings.smartIntent && selectedAction == nil && composerMode == .text) {
+                        let smartActive = settings.smartIntent && selectedAction == nil && composerMode == .text
+                        selectedAction = nil
+                        composerMode = .text
+                        showSelectPrompt = false
+                        settings.smartIntent = !smartActive
                     }
                 }
                 ForEach(Array(settings.mode.actions.enumerated()), id: \.element.id) { idx, action in
@@ -480,19 +485,6 @@ struct PopoverView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1...4)
                 .focused($composerFocused)
-                // Enter sends; Shift+Enter inserts a newline. (The field is
-                // multi-line, so a plain Return would otherwise just add a line.)
-                // Use the all-keys onKeyPress overload (macOS 14+) — it passes the
-                // KeyPress so we can read modifiers — and filter for Return here.
-                // (The Set<KeyEquivalent> overload is macOS 15+.)
-                .onKeyPress { press in
-                    guard press.key.character == KeyEquivalent.return.character,
-                          !press.modifiers.contains(.shift),
-                          !isLoading, !draftIsEmpty
-                    else { return .ignored }
-                    sendDraft()
-                    return .handled
-                }
                 .padding(.leading, 10)
                 .padding(.vertical, 4)
             if isLoading {
@@ -507,6 +499,10 @@ struct PopoverView: View {
         .frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: 21, style: .continuous).fill(.ultraThinMaterial))
         .overlay(RoundedRectangle(cornerRadius: 21, style: .continuous).stroke(composerBorder, lineWidth: 1))
+        // Enter sends; Shift+Enter inserts a newline. A window-local key monitor
+        // (not SwiftUI's .onKeyPress, which leaks Return inside an NSPopover and
+        // dismisses it) consumes Return before the field/popover can act on it.
+        .background(SubmitKeyMonitor(onSubmit: { if !isLoading { sendDraft() } }))
     }
 
     /// The send / stop button that lives inside the input pill.
@@ -815,6 +811,58 @@ struct PopoverView: View {
     private func setClipboard(_ s: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
+    }
+}
+
+/// Zero-size helper that installs a window-local key monitor so plain Return
+/// sends the composer — reliably, even inside an NSPopover where SwiftUI's
+/// `.onKeyPress` doesn't consume Return (it would otherwise leak out and dismiss
+/// the popover). Shift+Return and every other key fall through untouched, so a
+/// newline still works. The monitor lives only while this view is on screen.
+struct SubmitKeyMonitor: NSViewRepresentable {
+    var onSubmit: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        context.coordinator.install()
+        return NSView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onSubmit = onSubmit
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.remove()
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(onSubmit: onSubmit) }
+
+    final class Coordinator {
+        var onSubmit: () -> Void
+        private var monitor: Any?
+
+        init(onSubmit: @escaping () -> Void) { self.onSubmit = onSubmit }
+
+        func install() {
+            guard monitor == nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self else { return event }
+                // Return (36) / keypad Enter (76), no Shift, while a text field is
+                // focused → send and consume so it can't reach the field or popover.
+                guard event.keyCode == 36 || event.keyCode == 76,
+                      !event.modifierFlags.contains(.shift),
+                      (event.window?.firstResponder as? NSTextView) != nil
+                else { return event }
+                self.onSubmit()
+                return nil
+            }
+        }
+
+        func remove() {
+            if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
+        }
+
+        deinit { remove() }
     }
 }
 
