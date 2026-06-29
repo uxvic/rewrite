@@ -79,17 +79,18 @@ struct PopoverView: View {
             if voiceMode {
                 VoiceOverlayView(speech: speech, onDone: finishVoice, onCancel: cancelVoice)
             } else {
-                VStack(spacing: 0) {
-                    specBar
-                    HairlineDivider()
-                    Group {
-                        switch panel {
-                        case .main:     chatPanel
-                        case .settings: SettingsView()
-                        case .history:  historyPanel
-                        }
+                // The header and composer float as glass; the content scrolls
+                // full-height UNDER them (safe-area insets), so the chat shows
+                // through and behind the glass instead of stopping at a solid bar.
+                Group {
+                    switch panel {
+                    case .main:
+                        threadView.safeAreaInset(edge: .bottom, spacing: 0) { composer }
+                    case .settings: SettingsView()
+                    case .history:  historyPanel
                     }
                 }
+                .safeAreaInset(edge: .top, spacing: 0) { specBar }
                 // Esc dismisses a torn-off floating window (no-op while docked).
                 .onExitCommand { NotificationCenter.default.post(name: .rewriteCloseWindow, object: nil) }
             }
@@ -124,6 +125,8 @@ struct PopoverView: View {
             } else {
                 Text(panel == .settings ? "Settings" : "History")
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                    .padding(.horizontal, 16).padding(.vertical, 7)
+                    .glassFloat(Capsule())
             }
             Spacer(minLength: 6)
             // Settings now lives in the menu-bar menu; this top-right control is a
@@ -168,18 +171,8 @@ struct PopoverView: View {
             }
         }
         .padding(3)
-        .background(Capsule().fill(Theme.fillTranslucent.opacity(0.06)))
-        .overlay(Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1))
+        .glassFloat(Capsule())
         .frame(width: width)
-    }
-
-    // MARK: - Chat panel
-
-    private var chatPanel: some View {
-        VStack(spacing: 0) {
-            threadView
-            composer
-        }
     }
 
     // MARK: - What's new
@@ -410,9 +403,16 @@ struct PopoverView: View {
                     .foregroundStyle(selected ? Theme.accentInk : Theme.textPrimary)
             }
             .padding(.horizontal, 13).padding(.vertical, 8)
-            .background(Capsule().fill(selected ? Theme.accent : Theme.fillTranslucent.opacity(0.06)))
+            .background {
+                // Floating glass chip; accent fill when selected.
+                ZStack {
+                    if selected { Capsule().fill(Theme.accent) }
+                    else { Capsule().fill(.regularMaterial) }
+                }
+                .shadow(color: Color.black.opacity(0.18), radius: 5, y: 1)
+            }
             .overlay {
-                if !selected { Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1) }
+                if !selected { Capsule().stroke(Theme.fillTranslucent.opacity(0.10), lineWidth: 1) }
             }
             .contentShape(Capsule())
         }
@@ -472,7 +472,8 @@ struct PopoverView: View {
             }.buttonStyle(.plain)
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.fillTranslucent.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.regularMaterial)
+            .shadow(color: Color.black.opacity(0.18), radius: 5, y: 1))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.accent.opacity(0.4), lineWidth: 1))
     }
 
@@ -502,7 +503,8 @@ struct PopoverView: View {
         }
         .padding(.horizontal, 5).padding(.vertical, 5)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 21, style: .continuous).fill(.ultraThinMaterial))
+        .background(RoundedRectangle(cornerRadius: 21, style: .continuous).fill(.regularMaterial)
+            .shadow(color: Color.black.opacity(0.20), radius: 6, y: 2))
         .overlay(RoundedRectangle(cornerRadius: 21, style: .continuous).stroke(composerBorder, lineWidth: 1))
         // Enter sends; Shift+Enter inserts a newline. A window-local key monitor
         // (not SwiftUI's .onKeyPress, which leaks Return inside an NSPopover and

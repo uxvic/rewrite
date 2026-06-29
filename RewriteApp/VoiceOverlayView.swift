@@ -106,8 +106,7 @@ struct VoiceOverlayView: View {
             IconButton(systemName: "checkmark", size: 38, prominent: true, help: "Use this text") { onDone() }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(Capsule().fill(.ultraThinMaterial))
-        .overlay(Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1))
+        .glassFloat(Capsule())
     }
 
     private var waveform: some View {
