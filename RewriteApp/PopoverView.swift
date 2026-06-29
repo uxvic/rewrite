@@ -16,6 +16,9 @@ struct ChatTurn: Identifiable, Equatable {
     var showingDiff: Bool = false
     var sourceText: String = ""
     var fromClipboard: Bool = false
+    /// Smart "Request" turns fulfill an instruction rather than rewrite text, so
+    /// they must NOT be re-wrapped on retry and a source/result diff is meaningless.
+    var fulfillsRequest: Bool = false
 }
 
 /// What the composer's text means when sent: new source text, or a one-off
@@ -315,11 +318,15 @@ struct PopoverView: View {
             }
             miniButton("arrow.up", "Use") { draft = turn.text; composerMode = .text }
             miniButton("arrow.clockwise", "Retry") {
-                run(systemPrompt: turn.systemPrompt, label: turn.actionLabel, variation: true, source: turn.sourceText)
+                run(systemPrompt: turn.systemPrompt, label: turn.actionLabel,
+                    variation: true, source: turn.sourceText, wrap: !turn.fulfillsRequest)
             }
-            miniButton(turn.showingDiff ? "text.alignleft" : "plus.forwardslash.minus",
-                       turn.showingDiff ? "Result" : "Diff") {
-                mutateTurn(turn.id) { $0.showingDiff.toggle() }
+            // A source/result diff only makes sense for rewrites, not fulfilled requests.
+            if !turn.fulfillsRequest {
+                miniButton(turn.showingDiff ? "text.alignleft" : "plus.forwardslash.minus",
+                           turn.showingDiff ? "Result" : "Diff") {
+                    mutateTurn(turn.id) { $0.showingDiff.toggle() }
+                }
             }
         }
         .disabled(isLoading)
@@ -347,6 +354,15 @@ struct PopoverView: View {
     private var actionBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
+                // Writing only: toggle whether a plain send classifies intent
+                // (rewrite vs. fulfill) before acting. Governs the default send;
+                // explicit actions below always rewrite literally.
+                if settings.mode == .writing {
+                    selectableChip(icon: "sparkles", label: "Smart",
+                                   selected: settings.smartIntent) {
+                        settings.smartIntent.toggle()
+                    }
+                }
                 ForEach(Array(settings.mode.actions.enumerated()), id: \.element.id) { idx, action in
                     selectableChip(icon: action.systemImage, label: action.label,
                                    selected: selectedAction?.id == action.id) {
@@ -572,6 +588,13 @@ struct PopoverView: View {
             run(systemPrompt: RewriteAction.customSystemPrompt(t), label: "Custom: \(t)")
             return
         }
+        // Smart plain send (Writing, no explicit action): classify the input as
+        // text to polish vs. a request to fulfill, then act on that.
+        if selectedAction == nil && settings.mode == .writing && settings.smartIntent {
+            addUserTurn(t)
+            runSmart(text: t)
+            return
+        }
         // No explicit action picked → apply the mode's sensible default
         // (Writing: fix grammar + light polish; Prompt: optimize) instead of
         // sending raw text that never gets rewritten.
@@ -595,7 +618,8 @@ struct PopoverView: View {
         draft = ""; fromClipboard = false; showSelectPrompt = false
     }
 
-    private func run(systemPrompt: String, label: String, variation: Bool = false, source: String? = nil) {
+    private func run(systemPrompt: String, label: String, variation: Bool = false,
+                     source: String? = nil, wrap: Bool = true) {
         let src = (source ?? latestUserText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !src.isEmpty else { return }
         let runMode = settings.mode   // tag history with the mode this rewrite belongs to
@@ -603,49 +627,133 @@ struct PopoverView: View {
         isLoading = true
 
         let turn = ChatTurn(role: .assistant, text: "", actionLabel: label,
-                            systemPrompt: systemPrompt, isStreaming: true, sourceText: src)
+                            systemPrompt: systemPrompt, isStreaming: true, sourceText: src,
+                            fulfillsRequest: !wrap)
         let id = turn.id
         thread.append(turn)
 
         let provider = settings.makeProvider()
-        var payload = RewriteAction.wrap(src)
+        var payload = wrap ? RewriteAction.wrap(src) : src
         if variation { payload += "\n\n(Give a noticeably different alternative version.)" }
 
         currentTask = Task {
-            do {
-                let raw = try await provider.stream(text: payload, systemPrompt: systemPrompt) { piece in
-                    Task { @MainActor in mutateTurn(id) { $0.text += piece } }
-                }
-                let result = RewriteAction.clean(raw)
-                await MainActor.run {
-                    mutateTurn(id) { $0.text = result; $0.isStreaming = false }
-                    isLoading = false
-                    settings.addHistory(actionLabel: label, input: src, output: result, mode: runMode)
-                    if settings.autoCopyResult { setClipboard(result) }
-                }
-            } catch {
-                await MainActor.run {
-                    isLoading = false
-                    if Task.isCancelled {
-                        thread.removeAll { $0.id == id && $0.text.isEmpty }
-                        mutateTurn(id) { $0.isStreaming = false }
-                    } else if isSetupError(error) {
-                        // Provider isn't set up — show an inline setup card instead
-                        // of a raw error, and remember what to retry afterwards.
-                        thread.removeAll { $0.id == id }
-                        pendingRetry = PendingRun(systemPrompt: systemPrompt, label: label, source: src)
-                        if !thread.contains(where: { $0.role == .setup }) {
-                            thread.append(ChatTurn(role: .setup, text: ""))
-                        }
-                    } else {
-                        mutateTurn(id) {
-                            $0.text = error.localizedDescription
-                            $0.isStreaming = false
-                            $0.isError = true
-                        }
+            await streamBody(turnID: id, src: src, payload: payload,
+                             systemPrompt: systemPrompt, label: label,
+                             runMode: runMode, provider: provider)
+        }
+    }
+
+    /// Streams a provider response into an existing assistant turn, sharing the
+    /// success / cancel / setup-card / error handling between `run` and the
+    /// Smart path. The turn must already be appended to `thread`.
+    private func streamBody(turnID id: UUID, src: String, payload: String,
+                            systemPrompt: String, label: String,
+                            runMode: RewriteMode, provider: any RewriteProvider) async {
+        do {
+            let raw = try await provider.stream(text: payload, systemPrompt: systemPrompt) { piece in
+                Task { @MainActor in mutateTurn(id) { $0.text += piece } }
+            }
+            let result = RewriteAction.clean(raw)
+            await MainActor.run {
+                mutateTurn(id) { $0.text = result; $0.isStreaming = false }
+                isLoading = false
+                settings.addHistory(actionLabel: label, input: src, output: result, mode: runMode)
+                if settings.autoCopyResult { setClipboard(result) }
+            }
+        } catch {
+            await MainActor.run {
+                isLoading = false
+                if Task.isCancelled {
+                    thread.removeAll { $0.id == id && $0.text.isEmpty }
+                    mutateTurn(id) { $0.isStreaming = false }
+                } else if isSetupError(error) {
+                    // Provider isn't set up — show an inline setup card instead
+                    // of a raw error, and remember what to retry afterwards.
+                    thread.removeAll { $0.id == id }
+                    pendingRetry = PendingRun(systemPrompt: systemPrompt, label: label, source: src)
+                    if !thread.contains(where: { $0.role == .setup }) {
+                        thread.append(ChatTurn(role: .setup, text: ""))
+                    }
+                } else {
+                    mutateTurn(id) {
+                        $0.text = error.localizedDescription
+                        $0.isStreaming = false
+                        $0.isError = true
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Smart intent (plain-send: rewrite vs. fulfill a request)
+
+    private enum Intent: Equatable { case rewrite, request }
+
+    /// Classifies a plain-send input as text to polish (`.rewrite`) or a request
+    /// to fulfill (`.request`). Defaults to `.rewrite` on any error/cancel so
+    /// Smart can never do less than today's plain default send.
+    private func classifyIntent(_ text: String, provider: any RewriteProvider) async -> Intent {
+        do {
+            let raw = try await provider.stream(text: text,
+                                                systemPrompt: RewriteAction.classifySystemPrompt,
+                                                onDelta: { _ in })
+            return raw.uppercased().contains("REQUEST") ? .request : .rewrite
+        } catch {
+            return .rewrite
+        }
+    }
+
+    /// Smart plain send: show a turn immediately, classify the intent, then either
+    /// fulfill the request (assistant prompt, raw text) or polish the text (the
+    /// Writing default, wrapped). Falls back to a rewrite on cancel/error.
+    private func runSmart(text: String) {
+        let src = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !src.isEmpty else { return }
+        let runMode = settings.mode
+        currentTask?.cancel()
+        isLoading = true
+
+        // Show the assistant turn (typing dots) right away while we classify.
+        let turn = ChatTurn(role: .assistant, text: "", actionLabel: "Improve",
+                            isStreaming: true, sourceText: src)
+        let id = turn.id
+        thread.append(turn)
+
+        let provider = settings.makeProvider()
+
+        currentTask = Task {
+            let intent = await classifyIntent(src, provider: provider)
+            if Task.isCancelled {
+                await MainActor.run {
+                    isLoading = false
+                    thread.removeAll { $0.id == id && $0.text.isEmpty }
+                }
+                return
+            }
+            let systemPrompt: String
+            let payload: String
+            let label: String
+            switch intent {
+            case .request:
+                systemPrompt = RewriteAction.assistantSystemPrompt
+                payload = src              // no wrap — wrap() forbids answering
+                label = "Request"
+            case .rewrite:
+                systemPrompt = RewriteMode.writing.defaultAction.systemPrompt
+                payload = RewriteAction.wrap(src)
+                label = "Improve"
+            }
+            let isRequest = (intent == .request)
+            await MainActor.run {
+                mutateTurn(id) {
+                    $0.actionLabel = label
+                    $0.systemPrompt = systemPrompt
+                    $0.fulfillsRequest = isRequest
+                }
+            }
+            await streamBody(turnID: id, src: src, payload: payload,
+                             systemPrompt: systemPrompt, label: label,
+                             runMode: runMode, provider: provider)
         }
     }
 

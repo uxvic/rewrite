@@ -151,6 +151,11 @@ final class AppSettings: ObservableObject {
     @Published var autoCopyResult: Bool {
         didSet { defaults.set(autoCopyResult, forKey: "autoCopyResult") }
     }
+    /// Smart send: on a plain send (no style picked) in Writing, classify whether
+    /// the input is text to polish or a request to fulfill, and act accordingly.
+    @Published var smartIntent: Bool {
+        didSet { defaults.set(smartIntent, forKey: "smartIntent") }
+    }
 
     @Published var history: [HistoryItem] {
         didSet { persist(history, key: "history") }
@@ -186,6 +191,7 @@ final class AppSettings: ObservableObject {
         mode = defaults.string(forKey: "mode").flatMap(RewriteMode.init(rawValue:)) ?? .writing
         autoFillClipboard = defaults.object(forKey: "autoFillClipboard") == nil ? true : defaults.bool(forKey: "autoFillClipboard")
         autoCopyResult = defaults.bool(forKey: "autoCopyResult")
+        smartIntent = defaults.object(forKey: "smartIntent") == nil ? true : defaults.bool(forKey: "smartIntent")
         history = Self.read([HistoryItem].self, key: "history") ?? []
         customPresets = Self.read([CustomPreset].self, key: "customPresets") ?? []
     }
