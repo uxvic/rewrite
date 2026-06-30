@@ -142,14 +142,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     @objc private func quit() { NSApp.terminate(nil) }
 
     @objc func togglePopover(_ sender: Any?) {
-        // A torn-off floating window takes precedence over the docked popover.
-        if let panel = detachedPanel {
-            if panel.isKeyWindow {
-                redock()
-            } else {
-                NSApp.activate(ignoringOtherApps: true)
-                panel.makeKeyAndOrderFront(nil)
-            }
+        // The menu-bar icon is a toggle: if a torn-off floating window is open,
+        // clicking the icon closes it (redocks) — regardless of whether it's the
+        // focused window. Previously this only closed when the panel was key, so
+        // after dragging it elsewhere and clicking away, the icon just re-focused
+        // it and the only way to close was the ✕.
+        if detachedPanel != nil {
+            redock()
             return
         }
         if popover.isShown { closePopover() } else { showPopover() }
