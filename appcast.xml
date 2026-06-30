@@ -3,12 +3,15 @@
     <channel>
         <title>Rewrite</title>
         <item>
-            <title>1.7.0</title>
-            <pubDate>Tue, 30 Jun 2026 06:49:25 +0100</pubDate>
-            <sparkle:version>1.7.0</sparkle:version>
-            <sparkle:shortVersionString>1.7.0</sparkle:shortVersionString>
+            <title>1.7.1</title>
+            <pubDate>Tue, 30 Jun 2026 10:13:36 +0100</pubDate>
+            <sparkle:version>1.7.1</sparkle:version>
+            <sparkle:shortVersionString>1.7.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/uxvic/rewrite/releases/download/v1.7.0/Rewrite-1.7.0.zip" length="2391859" type="application/octet-stream" sparkle:edSignature="tRTqQ3H9DwdJAcjihs1T8u9H5J2ENJfSWLzBOUP9IpbgY1vF3gkLyI5p/18Kf5HnBe1Vckfcs/pf8JY2c++IDA=="/>
+            <description><![CDATA[<h2>Rewrite 1.7.1</h2>
+<p>Fixes Shift+Return closing the window when it's docked to the menu bar.</p>
+]]></description>
+            <enclosure url="https://github.com/uxvic/rewrite/releases/download/v1.7.1/Rewrite-1.7.1.zip" length="2392050" type="application/octet-stream" sparkle:edSignature="IxcKELN4s+npRy6x71Pk95m7xrSeIxVIIsW5GAS55mwGf56h7yKl7ice92A/yS7eSc3TLyoKn0qZ7wFtIlnaAQ=="/>
         </item>
     </channel>
 </rss>
