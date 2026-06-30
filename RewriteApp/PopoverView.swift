@@ -1002,11 +1002,13 @@ struct OverlayScrollers: NSViewRepresentable {
     }
 }
 
-/// Zero-size helper that installs a window-local key monitor so plain Return
-/// sends the composer — reliably, even inside an NSPopover where SwiftUI's
-/// `.onKeyPress` doesn't consume Return (it would otherwise leak out and dismiss
-/// the popover). Shift+Return and every other key fall through untouched, so a
-/// newline still works. The monitor lives only while this view is on screen.
+/// Zero-size helper that installs a window-local key monitor so Return drives the
+/// composer — reliably, even inside an NSPopover where SwiftUI's `.onKeyPress`
+/// doesn't consume Return (it would otherwise leak out and dismiss the popover).
+/// Plain Return sends; Shift+Return inserts a newline — BOTH are handled and
+/// consumed here so no Return variant can reach the docked popover and close it.
+/// Every other key falls through untouched. The monitor lives only while this
+/// view is on screen.
 struct SubmitKeyMonitor: NSViewRepresentable {
     var onSubmit: () -> Void
 
@@ -1035,13 +1037,21 @@ struct SubmitKeyMonitor: NSViewRepresentable {
             guard monitor == nil else { return }
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self else { return event }
-                // Return (36) / keypad Enter (76), no Shift, while a text field is
-                // focused → send and consume so it can't reach the field or popover.
+                // Return (36) / keypad Enter (76) while the composer is focused.
                 guard event.keyCode == 36 || event.keyCode == 76,
-                      !event.modifierFlags.contains(.shift),
-                      (event.window?.firstResponder as? NSTextView) != nil
+                      let tv = event.window?.firstResponder as? ComposerNSTextView
                 else { return event }
-                self.onSubmit()
+                // Mid-IME composition: let Return confirm the candidate — don't send,
+                // don't insert a newline, and don't consume (the input context needs it).
+                if tv.hasMarkedText() { return event }
+                if event.modifierFlags.contains(.shift) {
+                    // Shift+Return → newline. Insert it ourselves and CONSUME, so the
+                    // event can't leak into the docked NSPopover's default-key handling
+                    // (which would close the popover). Matches the torn-off panel.
+                    tv.insertNewline(nil)
+                } else {
+                    self.onSubmit()   // plain Return → send (caller gates on !isLoading)
+                }
                 return nil
             }
         }
