@@ -1,0 +1,41 @@
+name: windows-build
+
+# Builds the Windows app on a GitHub-hosted Windows runner and uploads a
+# self-contained x64 build as an artifact (so "build for Windows users" works
+# without a local Windows machine). Velopack installer packaging comes in M4.
+
+on:
+  push:
+    branches: [ "claude/kind-brahmagupta-nii3ih" ]
+    paths:
+      - "windows/**"
+      - ".github/workflows/windows-build.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore windows/Rewrite.sln
+
+      - name: Build (Release)
+        run: dotnet build windows/Rewrite.sln -c Release --no-restore
+
+      - name: Publish (self-contained win-x64)
+        run: >
+          dotnet publish windows/src/Rewrite/Rewrite.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Rewrite-win-x64
+          path: publish

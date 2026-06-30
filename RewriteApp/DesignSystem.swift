@@ -137,11 +137,22 @@ struct IconButton: View {
                 .font(.system(size: size * 0.42, weight: .semibold))
                 .foregroundStyle(prominent ? Theme.accentInk : (active ? Theme.accent : Theme.textPrimary))
                 .frame(width: size, height: size)
-                .background(Circle().fill(
-                    prominent ? Theme.accent : Theme.fillTranslucent.opacity(active ? 0.16 : 0.08)))
+                .background {
+                    // Floating Big Sur glass: frosted material (or accent when
+                    // prominent), a soft drop shadow so it lifts off the chat.
+                    ZStack {
+                        if prominent {
+                            Circle().fill(Theme.accent)
+                        } else {
+                            Circle().fill(.regularMaterial)
+                            if active { Circle().fill(Theme.accent.opacity(0.20)) }
+                        }
+                    }
+                    .shadow(color: Color.black.opacity(0.18), radius: 4, y: 1)
+                }
                 .overlay {
                     if !prominent {
-                        Circle().stroke(Theme.fillTranslucent.opacity(0.06), lineWidth: 1)
+                        Circle().stroke(Theme.fillTranslucent.opacity(0.10), lineWidth: 1)
                     }
                 }
                 .contentShape(Circle())
@@ -185,4 +196,12 @@ extension View {
 
     /// Near-black ambient radial background.
     func ambientBackground() -> some View { background(AmbientBackground()) }
+
+    /// Big Sur–style frosted glass for a floating control: an opaque-ish material
+    /// fill in `shape`, a hairline edge, and a soft drop shadow so it reads as
+    /// floating above the chat scrolling behind it.
+    func glassFloat<S: Shape>(_ shape: S, stroke: Double = 0.10, shadow: Double = 0.20) -> some View {
+        background(shape.fill(.regularMaterial).shadow(color: Color.black.opacity(shadow), radius: 6, y: 2))
+            .overlay(shape.stroke(Theme.fillTranslucent.opacity(stroke), lineWidth: 1))
+    }
 }

@@ -16,6 +16,14 @@ struct ChatTurn: Identifiable, Equatable {
     var showingDiff: Bool = false
     var sourceText: String = ""
     var fromClipboard: Bool = false
+    /// Smart "Request" turns fulfill an instruction rather than rewrite text, so
+    /// they must NOT be re-wrapped on retry and a source/result diff is meaningless.
+    var fulfillsRequest: Bool = false
+    /// A Smart (decide-and-act) turn. Drives tag-stripping while streaming and lets
+    /// Retry re-run the Smart pass. `rawText` accumulates the raw tagged stream so
+    /// the [REWRITE]/[REQUEST] tag can be parsed incrementally; `text` stays clean.
+    var isSmart: Bool = false
+    var rawText: String = ""
 }
 
 /// What the composer's text means when sent: new source text, or a one-off
@@ -26,14 +34,16 @@ enum ComposerMode { case text, instruction }
 struct SelectedAction: Equatable { let id: String; let systemPrompt: String; let label: String }
 
 /// A run to re-attempt after the user finishes provider setup in the chat.
-struct PendingRun: Equatable { let systemPrompt: String; let label: String; let source: String }
+struct PendingRun: Equatable { let systemPrompt: String; let label: String; let source: String; var smart: Bool = false }
 
 struct PopoverView: View {
     @ObservedObject private var settings = AppSettings.shared
     @StateObject private var speech = SpeechManager()
 
     @State private var threadByMode: [RewriteMode: [ChatTurn]] = [:]
-    @State private var draftByMode: [RewriteMode: String] = [:]
+    // The draft is shared across modes (so a half-typed message survives a
+    // Writing↔Prompt switch); only the conversations stay divided by mode.
+    @State private var draft: String = ""
     @State private var composerMode: ComposerMode = .text
     @State private var selectedAction: SelectedAction?
     @State private var pendingRetry: PendingRun?
@@ -41,7 +51,9 @@ struct PopoverView: View {
     @State private var isLoading = false
     @State private var currentTask: Task<Void, Never>?
     @State private var copiedTurnID: UUID?
-    @FocusState private var composerFocused: Bool
+    // Reflects the composer's actual first-responder state (reported by the
+    // native input view); drives only the focus-highlight border now.
+    @State private var composerFocused: Bool = false
     @State private var voiceMode = false
     @State private var fromClipboard = false
     @State private var lastClipboardCount = -1
@@ -59,43 +71,41 @@ struct PopoverView: View {
         get { threadByMode[settings.mode] ?? [] }
         nonmutating set { threadByMode[settings.mode] = newValue }
     }
-    private var draft: String {
-        get { draftByMode[settings.mode] ?? "" }
-        nonmutating set { draftByMode[settings.mode] = newValue }
-    }
 
     var body: some View {
         Group {
             if voiceMode {
                 VoiceOverlayView(speech: speech, onDone: finishVoice, onCancel: cancelVoice)
             } else {
-                VStack(spacing: 0) {
-                    specBar
-                    HairlineDivider()
-                    Group {
-                        switch panel {
-                        case .main:     chatPanel
-                        case .settings: SettingsView()
-                        case .history:  historyPanel
-                        }
+                // The header and composer float as glass; the content scrolls
+                // full-height UNDER them (safe-area insets), so the chat shows
+                // through and behind the glass instead of stopping at a solid bar.
+                Group {
+                    switch panel {
+                    case .main:
+                        threadView.safeAreaInset(edge: .bottom, spacing: 0) { composer }
+                    case .settings: SettingsView()
+                    case .history:  historyPanel
                     }
                 }
+                .safeAreaInset(edge: .top, spacing: 0) { specBar }
                 // Esc dismisses a torn-off floating window (no-op while docked).
                 .onExitCommand { NotificationCenter.default.post(name: .rewriteCloseWindow, object: nil) }
             }
         }
         .frame(width: 380, height: 668)
         .ambientBackground()
-        .onAppear { autoFillFromClipboard(); injectWhatsNewIfNeeded(); DispatchQueue.main.async { composerFocused = true } }
+        .onAppear { autoFillFromClipboard(); injectWhatsNewIfNeeded() }
         .onChange(of: settings.mode) { _, _ in selectedAction = nil; composerMode = .text; showSelectPrompt = false; injectWhatsNewIfNeeded() }
         // Host is dismissing a torn-off window while dictation is live — end it
         // cleanly so the mic is released.
         .onReceive(NotificationCenter.default.publisher(for: .rewriteForceExitVoice)) { _ in
             if voiceMode { cancelVoice() }
         }
-        // Opened from the menu-bar "Settings…" item.
+        // Opened from the menu-bar "Settings…" item. If dictation is live, end it
+        // cleanly (releases the mic) — otherwise leaving voice this way leaks it.
         .onReceive(NotificationCenter.default.publisher(for: .rewriteShowSettings)) { _ in
-            voiceMode = false
+            if voiceMode { cancelVoice() }
             panel = .settings
         }
     }
@@ -114,6 +124,8 @@ struct PopoverView: View {
             } else {
                 Text(panel == .settings ? "Settings" : "History")
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                    .padding(.horizontal, 16).padding(.vertical, 7)
+                    .glassFloat(Capsule())
             }
             Spacer(minLength: 6)
             // Settings now lives in the menu-bar menu; this top-right control is a
@@ -158,18 +170,8 @@ struct PopoverView: View {
             }
         }
         .padding(3)
-        .background(Capsule().fill(Theme.fillTranslucent.opacity(0.06)))
-        .overlay(Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1))
+        .glassFloat(Capsule())
         .frame(width: width)
-    }
-
-    // MARK: - Chat panel
-
-    private var chatPanel: some View {
-        VStack(spacing: 0) {
-            threadView
-            composer
-        }
     }
 
     // MARK: - What's new
@@ -209,6 +211,7 @@ struct PopoverView: View {
                     Color.clear.frame(height: 1).id("bottom")
                 }
                 .padding(16)
+                .background(OverlayScrollers())
             }
             .frame(maxHeight: .infinity)
             .onChange(of: thread) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
@@ -315,11 +318,16 @@ struct PopoverView: View {
             }
             miniButton("arrow.up", "Use") { draft = turn.text; composerMode = .text }
             miniButton("arrow.clockwise", "Retry") {
-                run(systemPrompt: turn.systemPrompt, label: turn.actionLabel, variation: true, source: turn.sourceText)
+                run(systemPrompt: turn.systemPrompt, label: turn.actionLabel,
+                    variation: true, source: turn.sourceText,
+                    wrap: !turn.fulfillsRequest, smart: turn.isSmart)
             }
-            miniButton(turn.showingDiff ? "text.alignleft" : "plus.forwardslash.minus",
-                       turn.showingDiff ? "Result" : "Diff") {
-                mutateTurn(turn.id) { $0.showingDiff.toggle() }
+            // A source/result diff only makes sense for rewrites, not fulfilled requests.
+            if !turn.fulfillsRequest {
+                miniButton(turn.showingDiff ? "text.alignleft" : "plus.forwardslash.minus",
+                           turn.showingDiff ? "Result" : "Diff") {
+                    mutateTurn(turn.id) { $0.showingDiff.toggle() }
+                }
             }
         }
         .disabled(isLoading)
@@ -347,6 +355,20 @@ struct PopoverView: View {
     private var actionBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
+                // Writing only: Smart governs the plain (no-action) send. It's
+                // mutually exclusive with the explicit actions — picking one
+                // deselects the others. `smartIntent` stays the persistent default;
+                // a picked action is a per-send override that hides Smart's highlight.
+                if settings.mode == .writing {
+                    selectableChip(icon: "sparkles", label: "Smart",
+                                   selected: settings.smartIntent && selectedAction == nil && composerMode == .text) {
+                        let smartActive = settings.smartIntent && selectedAction == nil && composerMode == .text
+                        selectedAction = nil
+                        composerMode = .text
+                        showSelectPrompt = false
+                        settings.smartIntent = !smartActive
+                    }
+                }
                 ForEach(Array(settings.mode.actions.enumerated()), id: \.element.id) { idx, action in
                     selectableChip(icon: action.systemImage, label: action.label,
                                    selected: selectedAction?.id == action.id) {
@@ -381,9 +403,16 @@ struct PopoverView: View {
                     .foregroundStyle(selected ? Theme.accentInk : Theme.textPrimary)
             }
             .padding(.horizontal, 13).padding(.vertical, 8)
-            .background(Capsule().fill(selected ? Theme.accent : Theme.fillTranslucent.opacity(0.06)))
+            .background {
+                // Floating glass chip; accent fill when selected.
+                ZStack {
+                    if selected { Capsule().fill(Theme.accent) }
+                    else { Capsule().fill(.regularMaterial) }
+                }
+                .shadow(color: Color.black.opacity(0.18), radius: 5, y: 1)
+            }
             .overlay {
-                if !selected { Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1) }
+                if !selected { Capsule().stroke(Theme.fillTranslucent.opacity(0.10), lineWidth: 1) }
             }
             .contentShape(Capsule())
         }
@@ -443,23 +472,27 @@ struct PopoverView: View {
             }.buttonStyle(.plain)
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.fillTranslucent.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.regularMaterial)
+            .shadow(color: Color.black.opacity(0.18), radius: 5, y: 1))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.accent.opacity(0.4), lineWidth: 1))
     }
 
     /// Growing pill input (1→~4 lines, then scrolls) with the send button inside.
     private var composerField: some View {
         HStack(alignment: .bottom, spacing: 6) {
-            TextField(composerPlaceholder,
-                      text: Binding(get: { draft }, set: { draft = $0 }),
-                      axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13.5))
-                .foregroundStyle(Theme.textPrimary)
-                .lineLimit(1...4)
-                .focused($composerFocused)
-                .padding(.leading, 10)
-                .padding(.vertical, 4)
+            ZStack(alignment: .topLeading) {
+                if draftIsEmpty {
+                    Text(composerPlaceholder)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .allowsHitTesting(false)
+                }
+                ComposerTextView(text: Binding(get: { draft }, set: { draft = $0 }),
+                                 maxLines: 4,
+                                 onFocusChange: { composerFocused = $0 })
+            }
+            .padding(.leading, 10)
+            .padding(.vertical, 4)
             if isLoading {
                 insideButton("stop.fill") { currentTask?.cancel() }
                     .keyboardShortcut(".", modifiers: .command)
@@ -470,8 +503,13 @@ struct PopoverView: View {
         }
         .padding(.horizontal, 5).padding(.vertical, 5)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 21, style: .continuous).fill(.ultraThinMaterial))
+        .background(RoundedRectangle(cornerRadius: 21, style: .continuous).fill(.regularMaterial)
+            .shadow(color: Color.black.opacity(0.20), radius: 6, y: 2))
         .overlay(RoundedRectangle(cornerRadius: 21, style: .continuous).stroke(composerBorder, lineWidth: 1))
+        // Enter sends; Shift+Enter inserts a newline. A window-local key monitor
+        // (not SwiftUI's .onKeyPress, which leaks Return inside an NSPopover and
+        // dismisses it) consumes Return before the field/popover can act on it.
+        .background(SubmitKeyMonitor(onSubmit: { if !isLoading { sendDraft() } }))
     }
 
     /// The send / stop button that lives inside the input pill.
@@ -500,15 +538,7 @@ struct PopoverView: View {
 
     private var historyPanel: some View {
         let items = settings.history.filter { $0.mode == historyMode }
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                modeSegmented($historyMode, width: 200)
-                Spacer(minLength: 6)
-                if !settings.history.isEmpty {
-                    Button { settings.history = [] } label: { Text("Clear") }
-                        .buttonStyle(InstrumentButtonStyle()).controlSize(.mini)
-                }
-            }
+        return Group {
             if items.isEmpty {
                 Text("No \(historyMode.title.capitalized) rewrites yet.")
                     .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
@@ -518,12 +548,30 @@ struct PopoverView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(items) { historyRow($0) }
                     }
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16)
+                    .background(OverlayScrollers())
                 }
             }
         }
-        .padding(16)
         .frame(maxHeight: .infinity)
+        // The filter row floats as glass and the rows scroll UNDER it (and the
+        // header), so there's no solid band at the top — same as the chat.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack {
+                modeSegmented($historyMode, width: 200)
+                Spacer(minLength: 6)
+                if !settings.history.isEmpty {
+                    Button { settings.history = [] } label: {
+                        Text("Clear")
+                            .font(.system(size: 12.5)).foregroundStyle(Theme.textPrimary)
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .glassFloat(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 8)
+        }
         .onAppear { historyMode = settings.mode }
     }
 
@@ -537,7 +585,7 @@ struct PopoverView: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .module(Theme.panel)
+            .glassFloat(RoundedRectangle(cornerRadius: Metric.cardRadius, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -572,6 +620,13 @@ struct PopoverView: View {
             run(systemPrompt: RewriteAction.customSystemPrompt(t), label: "Custom: \(t)")
             return
         }
+        // Smart plain send (Writing, no explicit action): one decide-and-act pass
+        // that polishes text or fulfills a request, labeled once it self-tags.
+        if selectedAction == nil && settings.mode == .writing && settings.smartIntent {
+            addUserTurn(t)
+            run(systemPrompt: "", label: "Improve", smart: true)
+            return
+        }
         // No explicit action picked → apply the mode's sensible default
         // (Writing: fix grammar + light polish; Prompt: optimize) instead of
         // sending raw text that never gets rewritten.
@@ -595,54 +650,124 @@ struct PopoverView: View {
         draft = ""; fromClipboard = false; showSelectPrompt = false
     }
 
-    private func run(systemPrompt: String, label: String, variation: Bool = false, source: String? = nil) {
+    /// Runs an action against the source text. When `smart` is set this is a Smart
+    /// decide-and-act pass: the model both decides (polish vs. fulfill) and acts in
+    /// one call, self-tagging its reply so the turn can be labeled (see streamBody).
+    private func run(systemPrompt: String, label: String, variation: Bool = false,
+                     source: String? = nil, wrap: Bool = true, smart: Bool = false) {
         let src = (source ?? latestUserText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !src.isEmpty else { return }
         let runMode = settings.mode   // tag history with the mode this rewrite belongs to
         currentTask?.cancel()
         isLoading = true
 
+        // Smart uses its own single prompt and never wraps (it may legitimately
+        // "answer" a request); the label is provisional until the tag resolves.
+        let prompt = smart ? RewriteAction.smartSystemPrompt : systemPrompt
         let turn = ChatTurn(role: .assistant, text: "", actionLabel: label,
-                            systemPrompt: systemPrompt, isStreaming: true, sourceText: src)
+                            systemPrompt: prompt, isStreaming: true, sourceText: src,
+                            fulfillsRequest: !wrap && !smart, isSmart: smart)
         let id = turn.id
         thread.append(turn)
 
         let provider = settings.makeProvider()
-        var payload = RewriteAction.wrap(src)
+        // Smart sees the conversation so a follow-up is a refinement, not a new task.
+        var payload: String
+        if smart {
+            payload = smartContextPayload() ?? src
+        } else {
+            payload = wrap ? RewriteAction.wrap(src) : src
+        }
         if variation { payload += "\n\n(Give a noticeably different alternative version.)" }
 
         currentTask = Task {
-            do {
-                let raw = try await provider.stream(text: payload, systemPrompt: systemPrompt) { piece in
-                    Task { @MainActor in mutateTurn(id) { $0.text += piece } }
-                }
-                let result = RewriteAction.clean(raw)
-                await MainActor.run {
-                    mutateTurn(id) { $0.text = result; $0.isStreaming = false }
-                    isLoading = false
-                    settings.addHistory(actionLabel: label, input: src, output: result, mode: runMode)
-                    if settings.autoCopyResult { setClipboard(result) }
-                }
-            } catch {
-                await MainActor.run {
-                    isLoading = false
-                    if Task.isCancelled {
-                        thread.removeAll { $0.id == id && $0.text.isEmpty }
-                        mutateTurn(id) { $0.isStreaming = false }
-                    } else if isSetupError(error) {
-                        // Provider isn't set up — show an inline setup card instead
-                        // of a raw error, and remember what to retry afterwards.
-                        thread.removeAll { $0.id == id }
-                        pendingRetry = PendingRun(systemPrompt: systemPrompt, label: label, source: src)
-                        if !thread.contains(where: { $0.role == .setup }) {
-                            thread.append(ChatTurn(role: .setup, text: ""))
+            await streamBody(turnID: id, src: src, payload: payload,
+                             systemPrompt: prompt, label: label,
+                             runMode: runMode, provider: provider, parseSmartTag: smart)
+        }
+    }
+
+    /// A transcript of the conversation so far for Smart, so a follow-up is read as
+    /// a refinement/continuation of the previous answer rather than a new request.
+    /// Returns nil when there's no prior context (the lone new message → use it raw).
+    private func smartContextPayload() -> String? {
+        let turns = thread.filter {
+            ($0.role == .user || $0.role == .assistant)
+            && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        guard turns.count > 1 else { return nil }   // only the new message → no context
+        let transcript = turns
+            .map { $0.role == .user ? "User: \($0.text)" : "You: \($0.text)" }
+            .joined(separator: "\n\n")
+        return """
+        Below is the conversation so far. The final "User:" line is a new follow-up — treat it as a \
+        continuation of this conversation (typically a refinement of, or addition to, what you last \
+        wrote under "You:"), not a brand-new standalone task. Produce the updated result.
+
+        \(transcript)
+        """
+    }
+
+    /// Streams a provider response into an existing assistant turn, sharing the
+    /// success / cancel / setup-card / error handling across every path. When
+    /// `parseSmartTag` is set, the raw reply is accumulated in `rawText` and its
+    /// leading [REWRITE]/[REQUEST] tag is stripped (and mapped to the turn label)
+    /// as it streams, so `text` always holds clean, paste-ready output.
+    private func streamBody(turnID id: UUID, src: String, payload: String,
+                            systemPrompt: String, label: String,
+                            runMode: RewriteMode, provider: any RewriteProvider,
+                            parseSmartTag: Bool = false) async {
+        do {
+            let raw = try await provider.stream(text: payload, systemPrompt: systemPrompt) { piece in
+                Task { @MainActor in
+                    if parseSmartTag {
+                        mutateTurn(id) {
+                            $0.rawText += piece
+                            let p = RewriteAction.parseSmart($0.rawText)
+                            if let l = p.label { $0.actionLabel = l; $0.fulfillsRequest = (l == "Request") }
+                            $0.text = p.body
                         }
                     } else {
-                        mutateTurn(id) {
-                            $0.text = error.localizedDescription
-                            $0.isStreaming = false
-                            $0.isError = true
-                        }
+                        mutateTurn(id) { $0.text += piece }
+                    }
+                }
+            }
+            let parsed: (label: String?, body: String) = parseSmartTag
+                ? RewriteAction.parseSmart(raw)
+                : (label: nil, body: RewriteAction.clean(raw))
+            let result = parsed.body
+            let finalLabel = parsed.label ?? label
+            await MainActor.run {
+                mutateTurn(id) {
+                    $0.text = result; $0.isStreaming = false
+                    if parseSmartTag {
+                        $0.actionLabel = finalLabel
+                        $0.fulfillsRequest = (parsed.label == "Request")
+                    }
+                }
+                isLoading = false
+                settings.addHistory(actionLabel: finalLabel, input: src, output: result, mode: runMode)
+                if settings.autoCopyResult { setClipboard(result) }
+            }
+        } catch {
+            await MainActor.run {
+                isLoading = false
+                if Task.isCancelled {
+                    thread.removeAll { $0.id == id && $0.text.isEmpty }
+                    mutateTurn(id) { $0.isStreaming = false }
+                } else if isSetupError(error) {
+                    // Provider isn't set up — show an inline setup card instead
+                    // of a raw error, and remember what to retry afterwards.
+                    thread.removeAll { $0.id == id }
+                    pendingRetry = PendingRun(systemPrompt: systemPrompt, label: label, source: src, smart: parseSmartTag)
+                    if !thread.contains(where: { $0.role == .setup }) {
+                        thread.append(ChatTurn(role: .setup, text: ""))
+                    }
+                } else {
+                    mutateTurn(id) {
+                        $0.text = error.localizedDescription
+                        $0.isStreaming = false
+                        $0.isError = true
                     }
                 }
             }
@@ -667,7 +792,7 @@ struct PopoverView: View {
         guard let p = pendingRetry else { return }
         thread.removeAll { $0.role == .setup }
         pendingRetry = nil
-        run(systemPrompt: p.systemPrompt, label: p.label, source: p.source)
+        run(systemPrompt: p.systemPrompt, label: p.label, source: p.source, smart: p.smart)
     }
 
     private func dismissSetup(_ id: UUID) {
@@ -703,14 +828,12 @@ struct PopoverView: View {
         if speech.isRecording { speech.stop() }
         voiceMode = false
         if !captured.isEmpty { draft = draft.isEmpty ? captured : draft + " " + captured }
-        // The reused window won't re-fire .onAppear, so re-focus the composer.
-        DispatchQueue.main.async { composerFocused = true }
+        // The composer view is rebuilt on return from voice and re-focuses itself.
     }
 
     private func cancelVoice() {
         if speech.isRecording { speech.stop() }
         voiceMode = false
-        DispatchQueue.main.async { composerFocused = true }
     }
 
     // MARK: - Clipboard
@@ -730,6 +853,204 @@ struct PopoverView: View {
     private func setClipboard(_ s: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
+    }
+}
+
+/// Native multi-line composer input: a real NSScrollView + NSTextView so the
+/// field scrolls with the trackpad (SwiftUI's TextField(axis:) only follows the
+/// cursor). Grows from one line up to `maxLines`, then scrolls. Focus places the
+/// cursor at the end (never select-all), which also defuses the tear-off
+/// select-all. Enter is handled by SubmitKeyMonitor; Shift+Enter inserts a newline.
+struct ComposerTextView: NSViewRepresentable {
+    @Binding var text: String
+    var maxLines: Int = 4
+    var onFocusChange: (Bool) -> Void = { _ in }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeNSView(context: Context) -> ComposerScrollView {
+        let tv = ComposerNSTextView()
+        tv.delegate = context.coordinator
+        tv.string = text
+        tv.font = .systemFont(ofSize: 13.5)
+        tv.textColor = NSColor(Theme.textPrimary)
+        tv.insertionPointColor = NSColor(Theme.accent)
+        tv.drawsBackground = false
+        tv.isRichText = false
+        tv.allowsUndo = true
+        tv.isAutomaticQuoteSubstitutionEnabled = false
+        tv.isAutomaticDashSubstitutionEnabled = false
+        tv.isAutomaticTextReplacementEnabled = false
+        tv.textContainerInset = .zero
+        tv.textContainer?.lineFragmentPadding = 0
+        tv.minSize = NSSize(width: 0, height: 0)
+        tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        tv.isVerticallyResizable = true
+        tv.isHorizontallyResizable = false
+        tv.autoresizingMask = [.width]
+        tv.textContainer?.widthTracksTextView = true
+        tv.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+        tv.onFocusChange = onFocusChange
+
+        let scroll = ComposerScrollView()
+        scroll.maxLines = maxLines
+        scroll.drawsBackground = false
+        scroll.borderType = .noBorder
+        scroll.hasVerticalScroller = false
+        scroll.hasHorizontalScroller = false
+        scroll.documentView = tv
+        // Fill the available width but hold height to the intrinsic (capped) size.
+        scroll.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        scroll.setContentHuggingPriority(.defaultHigh, for: .vertical)
+        scroll.setContentCompressionResistancePriority(.defaultHigh, for: .vertical)
+        context.coordinator.scrollView = scroll
+        context.coordinator.textView = tv
+        return scroll
+    }
+
+    func updateNSView(_ scroll: ComposerScrollView, context: Context) {
+        context.coordinator.parent = self
+        scroll.maxLines = maxLines
+        guard let tv = scroll.documentView as? ComposerNSTextView else { return }
+        tv.onFocusChange = onFocusChange
+        if tv.string != text {
+            tv.string = text
+            tv.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+        }
+        // Recompute height once SwiftUI has settled the width (so wrapping — and
+        // thus line count — is correct, e.g. for clipboard-prefilled drafts).
+        scroll.invalidateIntrinsicContentSize()
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: ComposerTextView
+        weak var scrollView: ComposerScrollView?
+        weak var textView: ComposerNSTextView?
+
+        init(_ parent: ComposerTextView) { self.parent = parent }
+
+        func textDidChange(_ notification: Notification) {
+            guard let tv = notification.object as? NSTextView else { return }
+            if parent.text != tv.string { parent.text = tv.string }
+            scrollView?.invalidateIntrinsicContentSize()
+        }
+    }
+}
+
+/// NSTextView that focuses itself when shown, never selects-all on focus (cursor
+/// to the end), and reports focus changes back to SwiftUI.
+final class ComposerNSTextView: NSTextView {
+    var onFocusChange: (Bool) -> Void = { _ in }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil else { return }
+        // Focus on appear — covers first open and the rebuild after voice/settings.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let win = self.window else { return }
+            win.makeFirstResponder(self)
+        }
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let ok = super.becomeFirstResponder()
+        if ok {
+            let end = (string as NSString).length
+            setSelectedRange(NSRange(location: end, length: 0))   // never select-all
+            DispatchQueue.main.async { [weak self] in self?.onFocusChange(true) }
+        }
+        return ok
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let ok = super.resignFirstResponder()
+        if ok { DispatchQueue.main.async { [weak self] in self?.onFocusChange(false) } }
+        return ok
+    }
+}
+
+/// Scroll view that sizes itself to its text, from one line up to `maxLines`
+/// (then it scrolls), so SwiftUI lays the composer out at the right height.
+final class ComposerScrollView: NSScrollView {
+    var maxLines: Int = 4
+
+    override var intrinsicContentSize: NSSize {
+        guard let tv = documentView as? NSTextView,
+              let lm = tv.layoutManager, let tc = tv.textContainer else {
+            return NSSize(width: NSView.noIntrinsicMetric, height: 20)
+        }
+        lm.ensureLayout(for: tc)
+        let line = lm.defaultLineHeight(for: tv.font ?? .systemFont(ofSize: 13.5))
+        let used = lm.usedRect(for: tc).height
+        let h = min(max(used, line), line * CGFloat(maxLines))
+        return NSSize(width: NSView.noIntrinsicMetric, height: ceil(h))
+    }
+}
+
+/// Forces the enclosing SwiftUI `ScrollView`'s underlying NSScrollView to use thin
+/// overlay scrollers (appear only while scrolling, then fade) instead of the wide
+/// always-on bar — regardless of the system "show scroll bars" setting.
+struct OverlayScrollers: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ v: NSView, context: Context) {
+        DispatchQueue.main.async {
+            guard let s = v.enclosingScrollView else { return }
+            s.scrollerStyle = .overlay
+            s.hasHorizontalScroller = false
+            s.autohidesScrollers = true
+        }
+    }
+}
+
+/// Zero-size helper that installs a window-local key monitor so plain Return
+/// sends the composer — reliably, even inside an NSPopover where SwiftUI's
+/// `.onKeyPress` doesn't consume Return (it would otherwise leak out and dismiss
+/// the popover). Shift+Return and every other key fall through untouched, so a
+/// newline still works. The monitor lives only while this view is on screen.
+struct SubmitKeyMonitor: NSViewRepresentable {
+    var onSubmit: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        context.coordinator.install()
+        return NSView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onSubmit = onSubmit
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.remove()
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(onSubmit: onSubmit) }
+
+    final class Coordinator {
+        var onSubmit: () -> Void
+        private var monitor: Any?
+
+        init(onSubmit: @escaping () -> Void) { self.onSubmit = onSubmit }
+
+        func install() {
+            guard monitor == nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self else { return event }
+                // Return (36) / keypad Enter (76), no Shift, while a text field is
+                // focused → send and consume so it can't reach the field or popover.
+                guard event.keyCode == 36 || event.keyCode == 76,
+                      !event.modifierFlags.contains(.shift),
+                      (event.window?.firstResponder as? NSTextView) != nil
+                else { return event }
+                self.onSubmit()
+                return nil
+            }
+        }
+
+        func remove() {
+            if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
+        }
+
+        deinit { remove() }
     }
 }
 
@@ -828,14 +1149,14 @@ struct WhatsNewCardView: View {
     }
 
     private let highlights: [Highlight] = [
-        .init(icon: "arrow.up.and.down.and.arrow.left.and.right", title: "Pop it out anywhere",
-              blurb: "Drag the window off the menu bar and drop it wherever you like — it stays put."),
-        .init(icon: "mic.fill", title: "Dictation stays open",
-              blurb: "Start talking and the window floats — clicking away or switching apps won't dismiss it."),
-        .init(icon: "waveform", title: "Smoother dictation",
-              blurb: "Pause and keep going — your earlier words are no longer cleared."),
-        .init(icon: "xmark.circle", title: "Close + Settings",
-              blurb: "A new ✕ closes the window; Settings moved to the menu-bar icon's menu.")
+        .init(icon: "sparkles", title: "Smart just gets it",
+              blurb: "Type and send — Rewrite figures out whether to polish your text or actually draft what you asked for, and follow-ups refine it in place instead of starting over."),
+        .init(icon: "circle.hexagongrid.fill", title: "A lighter, glass look",
+              blurb: "A floating Big Sur–style glass interface — your chat flows behind the controls instead of behind a solid bar."),
+        .init(icon: "return", title: "Send with Enter",
+              blurb: "Press Enter to send (Shift+Enter for a new line), and the input now scrolls smoothly for longer text."),
+        .init(icon: "arrow.left.arrow.right", title: "Your draft follows you",
+              blurb: "Start typing in Writing and switch to Prompt — your text comes along instead of getting lost.")
     ]
 
     var body: some View {

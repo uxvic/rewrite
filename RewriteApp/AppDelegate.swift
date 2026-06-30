@@ -227,6 +227,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
 
+        // After tear-off the composer re-focuses and AppKit selects ALL its text;
+        // a stray keystroke would then wipe the draft. Collapse the selection to the
+        // end (keep focus, nothing selected) once focus settles. No-ops in voice mode
+        // (the torn-off content has no text field, so the cast fails).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak panel] in
+            guard let tv = panel?.firstResponder as? NSTextView else { return }
+            tv.setSelectedRange(NSRange(location: (tv.string as NSString).length, length: 0))
+        }
+
         if grabUnderCursor {
             let m = NSEvent.mouseLocation
             dragGrabOffset = NSPoint(x: m.x - panel.frame.origin.x, y: m.y - panel.frame.origin.y)
