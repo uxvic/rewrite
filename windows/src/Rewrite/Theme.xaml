@@ -26,6 +26,8 @@
     <v:BubbleBrushConverter x:Key="BubbleBrush" />
     <v:ErrorBrushConverter x:Key="ErrBrush" />
     <v:ModeBrushConverter x:Key="ModeBrush" />
+    <v:EnumToVisibilityConverter x:Key="EnumVis" />
+    <v:EnumNotToVisibilityConverter x:Key="EnumNotVis" />
     <BooleanToVisibilityConverter x:Key="BoolVis" />
 
 </ResourceDictionary>

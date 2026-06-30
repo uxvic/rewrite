@@ -23,6 +23,16 @@ public sealed class AppSettings
     public bool SmartIntent { get; set; } = true;
     public bool AutoCopyResult { get; set; }
 
+    /// Past rewrites for the History panel (most-recent first, capped at 20).
+    public List<HistoryItem> History { get; set; } = new();
+
+    public void AddHistory(string label, string input, string output, RewriteMode mode)
+    {
+        History.Insert(0, new HistoryItem(Guid.NewGuid().ToString(), label, input, output, mode));
+        if (History.Count > 20) History.RemoveRange(20, History.Count - 20);
+        Save();
+    }
+
     public static readonly string[] AnthropicModels =
         { "claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8" };
 

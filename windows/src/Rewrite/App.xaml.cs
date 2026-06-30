@@ -41,9 +41,12 @@ public partial class App : Application
         var menu = new ContextMenu();
         var open = new MenuItem { Header = "Open Rewrite" };
         open.Click += (_, _) => ShowWindow();
+        var settings = new MenuItem { Header = "Settings" };
+        settings.Click += (_, _) => { ShowWindow(); _window?.ShowSettings(); };
         var quit = new MenuItem { Header = "Quit Rewrite" };
         quit.Click += (_, _) => Shutdown();
         menu.Items.Add(open);
+        menu.Items.Add(settings);
         menu.Items.Add(new Separator());
         menu.Items.Add(quit);
         return menu;

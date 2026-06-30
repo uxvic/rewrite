@@ -103,6 +103,24 @@ public sealed class ErrorBrushConverter : IValueConverter
     public object ConvertBack(object? value, Type t, object? p, CultureInfo c) => throw new NotSupportedException();
 }
 
+/// enum value → Visible when its name equals the parameter, else Collapsed.
+public sealed class EnumToVisibilityConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => string.Equals(value?.ToString(), parameter as string, StringComparison.Ordinal)
+            ? Visibility.Visible : Visibility.Collapsed;
+    public object ConvertBack(object? value, Type t, object? p, CultureInfo c) => throw new NotSupportedException();
+}
+
+/// enum value → Collapsed when its name equals the parameter, else Visible.
+public sealed class EnumNotToVisibilityConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => string.Equals(value?.ToString(), parameter as string, StringComparison.Ordinal)
+            ? Visibility.Collapsed : Visibility.Visible;
+    public object ConvertBack(object? value, Type t, object? p, CultureInfo c) => throw new NotSupportedException();
+}
+
 /// Mode segment: parameter "Writing"/"Prompt" → accent fill when selected else
 /// transparent; parameter "Writing.ink"/"Prompt.ink" → ink/secondary text colour.
 public sealed class ModeBrushConverter : IValueConverter

@@ -25,6 +25,11 @@ public partial class PopoverWindow : Window
         Composer.CaretIndex = Composer.Text?.Length ?? 0;
     }
 
+    public void ShowSettings()
+    {
+        if (DataContext is ChatViewModel vm) vm.CurrentPane = Pane.Settings;
+    }
+
     private void Composer_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         // Enter sends; Shift+Enter inserts a newline.

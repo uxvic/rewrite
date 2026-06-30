@@ -10,6 +10,9 @@ using Rewrite.Services;
 
 namespace Rewrite.ViewModels;
 
+/// Which screen the window is showing.
+public enum Pane { Chat, Settings, History }
+
 /// Drives the chat: send pipeline, Smart decide-and-act, modes, per-mode threads,
 /// shared draft. Mirrors the macOS PopoverView logic.
 public partial class ChatViewModel : ObservableObject
@@ -50,6 +53,91 @@ public partial class ChatViewModel : ObservableObject
 
     [ObservableProperty] private bool _isLoading;
     partial void OnIsLoadingChanged(bool value) { OnPropertyChanged(nameof(CanSend)); SendCommand.NotifyCanExecuteChanged(); }
+
+    [ObservableProperty] private Pane _currentPane = Pane.Chat;
+
+    // MARK: - Pane switching
+
+    [RelayCommand] private void ShowChat() => CurrentPane = Pane.Chat;
+    [RelayCommand] private void ShowSettings() => CurrentPane = Pane.Settings;
+    [RelayCommand]
+    private void ToggleHistory()
+    {
+        if (CurrentPane == Pane.History) { CurrentPane = Pane.Chat; return; }
+        RefreshHistory();
+        CurrentPane = Pane.History;
+    }
+
+    // MARK: - Settings (read/write AppSettings, persisted)
+
+    public bool ProviderIsAnthropic
+    {
+        get => _settings.Provider == LlmProvider.Anthropic;
+        set { if (value) { _settings.Provider = LlmProvider.Anthropic; _settings.Save(); RaiseProviderChanged(); } }
+    }
+    public bool ProviderIsOllama
+    {
+        get => _settings.Provider == LlmProvider.Ollama;
+        set { if (value) { _settings.Provider = LlmProvider.Ollama; _settings.Save(); RaiseProviderChanged(); } }
+    }
+    private void RaiseProviderChanged()
+    {
+        OnPropertyChanged(nameof(ProviderIsAnthropic));
+        OnPropertyChanged(nameof(ProviderIsOllama));
+    }
+
+    public string ApiKey { get => _settings.ApiKey; set => _settings.ApiKey = value; }
+    public string AnthropicModel { get => _settings.AnthropicModel; set { _settings.AnthropicModel = value; _settings.Save(); } }
+    public string OllamaHost { get => _settings.OllamaHost; set { _settings.OllamaHost = value; _settings.Save(); } }
+    public string OllamaModel { get => _settings.OllamaModel; set { _settings.OllamaModel = value; _settings.Save(); } }
+    public bool AutoCopyResult { get => _settings.AutoCopyResult; set { _settings.AutoCopyResult = value; _settings.Save(); } }
+    public IReadOnlyList<string> AnthropicModels => AppSettings.AnthropicModels;
+    public string AppVersion => "0.1.0";
+
+    [ObservableProperty] private string _verifyStatus = "";
+
+    [RelayCommand]
+    private async Task Verify()
+    {
+        VerifyStatus = "Checking…";
+        try { VerifyStatus = await _settings.MakeProvider().VerifyAsync(CancellationToken.None); }
+        catch (Exception ex) { VerifyStatus = ex.Message; }
+    }
+
+    // MARK: - History
+
+    public ObservableCollection<HistoryItem> HistoryItems { get; } = new();
+    [ObservableProperty] private RewriteMode _historyMode = RewriteMode.Writing;
+    partial void OnHistoryModeChanged(RewriteMode value) => RefreshHistory();
+
+    public void RefreshHistory()
+    {
+        HistoryItems.Clear();
+        foreach (var h in _settings.History)
+            if (h.Mode == HistoryMode) HistoryItems.Add(h);
+    }
+
+    [RelayCommand] private void SetHistoryMode(string m) => HistoryMode = m == "Prompt" ? RewriteMode.Prompt : RewriteMode.Writing;
+
+    [RelayCommand]
+    private void ClearHistory()
+    {
+        _settings.History.Clear();
+        _settings.Save();
+        RefreshHistory();
+    }
+
+    [RelayCommand]
+    private void OpenHistory(HistoryItem item)
+    {
+        _cts?.Cancel();
+        IsLoading = false;
+        Mode = item.Mode;
+        Thread.Clear();
+        Thread.Add(new ChatTurn { Role = TurnRole.User, Text = item.Input });
+        Thread.Add(new ChatTurn { Role = TurnRole.Assistant, Text = item.Output, Label = item.ActionLabel, SourceText = item.Input });
+        CurrentPane = Pane.Chat;
+    }
 
     // MARK: - Derived
 
@@ -147,12 +235,13 @@ public partial class ChatViewModel : ObservableObject
         var provider = _settings.MakeProvider();
         var payload = smart ? (SmartContextPayload() ?? src) : (wrap ? RewriteActions.Wrap(src) : src);
         if (variation) payload += "\n\n(Give a noticeably different alternative version.)";
+        var runMode = Mode; // tag history with the mode this rewrite belongs to
 
-        _ = StreamBody(turn, payload, prompt, label, provider, parseTag: smart, ct);
+        _ = StreamBody(turn, payload, prompt, label, provider, parseTag: smart, runMode, ct);
     }
 
     private async Task StreamBody(ChatTurn turn, string payload, string systemPrompt, string label,
-                                  IRewriteProvider provider, bool parseTag, CancellationToken ct)
+                                  IRewriteProvider provider, bool parseTag, RewriteMode runMode, CancellationToken ct)
     {
         var dispatcher = Application.Current.Dispatcher;
         try
@@ -174,17 +263,21 @@ public partial class ChatViewModel : ObservableObject
 
             dispatcher.Invoke(() =>
             {
+                string finalLabel = label;
                 if (parseTag)
                 {
                     var p = RewriteActions.ParseSmart(raw);
                     turn.Text = p.Body;
-                    turn.Label = p.Label ?? label;
+                    finalLabel = p.Label ?? label;
+                    turn.Label = finalLabel;
                     turn.FulfillsRequest = p.Label == "Request";
                 }
                 else turn.Text = RewriteActions.Clean(raw);
                 turn.IsStreaming = false;
                 IsLoading = false;
                 if (_settings.AutoCopyResult) TrySetClipboard(turn.Text);
+                _settings.AddHistory(finalLabel, turn.SourceText, turn.Text, runMode);
+                if (CurrentPane == Pane.History) RefreshHistory();
             });
         }
         catch (OperationCanceledException)
