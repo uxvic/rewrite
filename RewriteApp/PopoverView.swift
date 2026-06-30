@@ -317,11 +317,7 @@ struct PopoverView: View {
                 }
             }
             miniButton("arrow.up", "Use") { draft = turn.text; composerMode = .text }
-            miniButton("arrow.clockwise", "Retry") {
-                run(systemPrompt: turn.systemPrompt, label: turn.actionLabel,
-                    variation: true, source: turn.sourceText,
-                    wrap: !turn.fulfillsRequest, smart: turn.isSmart)
-            }
+            retryMenu(turn)
             // A source/result diff only makes sense for rewrites, not fulfilled requests.
             if !turn.fulfillsRequest {
                 miniButton(turn.showingDiff ? "text.alignleft" : "plus.forwardslash.minus",
@@ -336,16 +332,50 @@ struct PopoverView: View {
 
     private func miniButton(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 10))
-                Text(label).font(.system(size: 11, weight: .medium))
-            }
-            .foregroundStyle(Theme.textSecondary)
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(Capsule().fill(Theme.fillTranslucent.opacity(0.06)))
-            .contentShape(Capsule())
+            miniCapsule(icon, label)
         }
         .buttonStyle(.plain)
+    }
+
+    /// The shared capsule look used by the mini action buttons (and the Retry menu).
+    private func miniCapsule(_ icon: String, _ label: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 10))
+            Text(label).font(.system(size: 11, weight: .medium))
+        }
+        .foregroundStyle(Theme.textSecondary)
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .background(Capsule().fill(Theme.fillTranslucent.opacity(0.06)))
+        .contentShape(Capsule())
+    }
+
+    /// Retry is a menu, not a one-shot: instead of silently re-running the same
+    /// thing (or, on Smart, re-guessing intent), it lets the user pick HOW to redo
+    /// it — try again as-is, or rewrite the original text in a specific tone/style.
+    /// Every option re-runs against the turn's source text (the original input).
+    private func retryMenu(_ turn: ChatTurn) -> some View {
+        Menu {
+            Button {
+                run(systemPrompt: turn.systemPrompt, label: turn.actionLabel,
+                    variation: true, source: turn.sourceText,
+                    wrap: !turn.fulfillsRequest, smart: turn.isSmart)
+            } label: { Label("Try again", systemImage: "arrow.clockwise") }
+            Divider()
+            Section("Rewrite as…") {
+                ForEach(RewriteAction.allCases) { action in
+                    Button {
+                        run(systemPrompt: action.systemPrompt, label: action.label,
+                            source: turn.sourceText, wrap: true, smart: false)
+                    } label: { Label(action.label, systemImage: action.systemImage) }
+                }
+            }
+        } label: {
+            miniCapsule("arrow.clockwise", "Retry")
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 
     // MARK: - Action bar (pick an action, then type & send)
@@ -1002,13 +1032,13 @@ struct OverlayScrollers: NSViewRepresentable {
     }
 }
 
-/// Zero-size helper that installs a window-local key monitor so Return drives the
-/// composer — reliably, even inside an NSPopover where SwiftUI's `.onKeyPress`
-/// doesn't consume Return (it would otherwise leak out and dismiss the popover).
-/// Plain Return sends; Shift+Return inserts a newline — BOTH are handled and
-/// consumed here so no Return variant can reach the docked popover and close it.
-/// Every other key falls through untouched. The monitor lives only while this
-/// view is on screen.
+/// Zero-size helper that installs a window-local key monitor so the composer's own
+/// keys drive it — reliably, even inside a docked NSPopover, where these keys
+/// otherwise leak past the field and dismiss the popover (SwiftUI's `.onKeyPress`
+/// doesn't consume them). Plain Return sends; Shift+Return inserts a newline; a
+/// plain Space types a space — all handled and consumed here so none of them can
+/// reach the popover and close it. Every other key falls through untouched. The
+/// monitor lives only while this view is on screen.
 struct SubmitKeyMonitor: NSViewRepresentable {
     var onSubmit: () -> Void
 
@@ -1037,20 +1067,29 @@ struct SubmitKeyMonitor: NSViewRepresentable {
             guard monitor == nil else { return }
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self else { return event }
-                // Return (36) / keypad Enter (76) while the composer is focused.
-                guard event.keyCode == 36 || event.keyCode == 76,
+                // Return (36) / keypad Enter (76) / Space (49) while the composer is
+                // focused. Inside the docked NSPopover these otherwise leak past the
+                // field and dismiss the popover, so we act on them here (this local
+                // monitor runs before window dispatch) and CONSUME them.
+                guard event.keyCode == 36 || event.keyCode == 76 || event.keyCode == 49,
                       let tv = event.window?.firstResponder as? ComposerNSTextView
                 else { return event }
-                // Mid-IME composition: let Return confirm the candidate — don't send,
-                // don't insert a newline, and don't consume (the input context needs it).
+                // Mid-IME composition: let the input method handle the key (e.g. Return
+                // confirms the candidate). Don't act on it and don't consume it.
                 if tv.hasMarkedText() { return event }
-                if event.modifierFlags.contains(.shift) {
-                    // Shift+Return → newline. Insert it ourselves and CONSUME, so the
-                    // event can't leak into the docked NSPopover's default-key handling
-                    // (which would close the popover). Matches the torn-off panel.
-                    tv.insertNewline(nil)
-                } else {
-                    self.onSubmit()   // plain Return → send (caller gates on !isLoading)
+                switch event.keyCode {
+                case 49:
+                    // Plain Space only — leave ⌥/⌃/⌘+Space (e.g. the open hotkey) alone.
+                    guard event.modifierFlags
+                        .intersection([.command, .option, .control, .function]).isEmpty
+                    else { return event }
+                    tv.insertText(" ", replacementRange: tv.selectedRange())
+                default:  // Return / keypad Enter
+                    if event.modifierFlags.contains(.shift) {
+                        tv.insertNewline(nil)   // Shift+Return → newline
+                    } else {
+                        self.onSubmit()         // Return → send (caller gates on !isLoading)
+                    }
                 }
                 return nil
             }
