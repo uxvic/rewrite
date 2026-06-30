@@ -102,9 +102,10 @@ struct PopoverView: View {
         .onReceive(NotificationCenter.default.publisher(for: .rewriteForceExitVoice)) { _ in
             if voiceMode { cancelVoice() }
         }
-        // Opened from the menu-bar "Settings…" item.
+        // Opened from the menu-bar "Settings…" item. If dictation is live, end it
+        // cleanly (releases the mic) — otherwise leaving voice this way leaks it.
         .onReceive(NotificationCenter.default.publisher(for: .rewriteShowSettings)) { _ in
-            voiceMode = false
+            if voiceMode { cancelVoice() }
             panel = .settings
         }
     }
@@ -1148,14 +1149,14 @@ struct WhatsNewCardView: View {
     }
 
     private let highlights: [Highlight] = [
-        .init(icon: "rectangle.split.2x1", title: "Writing & Prompt, kept apart",
-              blurb: "Each tab keeps its own conversation and history now — switching never mixes them up."),
-        .init(icon: "wand.and.stars", title: "Just hit send",
-              blurb: "Send without picking a style and Rewrite fixes grammar and polishes for you — Prompt mode optimizes."),
-        .init(icon: "lock.shield", title: "Your data, your call",
-              blurb: "Sign-in stays optional, and you can delete your account and data anytime from Settings."),
-        .init(icon: "text.bubble", title: "What's new, right here",
-              blurb: "Release notes now land straight in the chat — no extra windows to chase.")
+        .init(icon: "sparkles", title: "Smart just gets it",
+              blurb: "Type and send — Rewrite figures out whether to polish your text or actually draft what you asked for, and follow-ups refine it in place instead of starting over."),
+        .init(icon: "circle.hexagongrid.fill", title: "A lighter, glass look",
+              blurb: "A floating Big Sur–style glass interface — your chat flows behind the controls instead of behind a solid bar."),
+        .init(icon: "return", title: "Send with Enter",
+              blurb: "Press Enter to send (Shift+Enter for a new line), and the input now scrolls smoothly for longer text."),
+        .init(icon: "arrow.left.arrow.right", title: "Your draft follows you",
+              blurb: "Start typing in Writing and switch to Prompt — your text comes along instead of getting lost.")
     ]
 
     var body: some View {
