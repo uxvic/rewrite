@@ -3,15 +3,15 @@
     <channel>
         <title>Rewrite</title>
         <item>
-            <title>1.7.1</title>
-            <pubDate>Tue, 30 Jun 2026 10:13:36 +0100</pubDate>
-            <sparkle:version>1.7.1</sparkle:version>
-            <sparkle:shortVersionString>1.7.1</sparkle:shortVersionString>
+            <title>1.7.2</title>
+            <pubDate>Wed, 01 Jul 2026 05:53:08 +0100</pubDate>
+            <sparkle:version>1.7.2</sparkle:version>
+            <sparkle:shortVersionString>1.7.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Rewrite 1.7.1</h2>
-<p>Fixes Shift+Return closing the window when it's docked to the menu bar.</p>
+            <description><![CDATA[<h2>Rewrite 1.7.2</h2>
+<p>Retry now lets you pick a tone (Professional, Casual, and more). Fixes for typing in the docked window and closing it from the menu bar.</p>
 ]]></description>
-            <enclosure url="https://github.com/uxvic/rewrite/releases/download/v1.7.1/Rewrite-1.7.1.zip" length="2392050" type="application/octet-stream" sparkle:edSignature="IxcKELN4s+npRy6x71Pk95m7xrSeIxVIIsW5GAS55mwGf56h7yKl7ice92A/yS7eSc3TLyoKn0qZ7wFtIlnaAQ=="/>
+            <enclosure url="https://github.com/uxvic/rewrite/releases/download/v1.7.2/Rewrite-1.7.2.zip" length="2422119" type="application/octet-stream" sparkle:edSignature="ESA3Ucl3WrfExH9RsxL5QoBytnYExdXrHG6Vj4+laJED5CBB83cMIP7b3e+3AkVR6tP/rc2LhecLJ7HJSa47Bg=="/>
         </item>
     </channel>
 </rss>
