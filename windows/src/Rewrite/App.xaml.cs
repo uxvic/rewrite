@@ -20,7 +20,8 @@ public partial class App : Application
         base.OnStartup(e);
 
         _window = new PopoverWindow();
-        _window.Deactivated += (_, _) => _window.Hide();
+        // Hide when it loses focus — unless the user pinned it open (tear-off parity).
+        _window.Deactivated += (_, _) => { if (!_window.IsPinned) _window.Hide(); };
 
         _tray = new TaskbarIcon
         {

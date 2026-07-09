@@ -56,6 +56,10 @@ public partial class ChatViewModel : ObservableObject
 
     [ObservableProperty] private Pane _currentPane = Pane.Chat;
 
+    /// When pinned, the window stays open after it loses focus (tear-off parity).
+    [ObservableProperty] private bool _isPinned;
+    [RelayCommand] private void TogglePin() => IsPinned = !IsPinned;
+
     // MARK: - Pane switching
 
     [RelayCommand] private void ShowChat() => CurrentPane = Pane.Chat;
@@ -175,6 +179,34 @@ public partial class ChatViewModel : ObservableObject
     }
 
     [RelayCommand] private void Stop() => _cts?.Cancel();
+
+    // MARK: - Dictation (local speech-to-text)
+
+    private SpeechService? _speech;
+    [ObservableProperty] private bool _isDictating;
+
+    [RelayCommand]
+    private void ToggleDictation()
+    {
+        if (IsDictating)
+        {
+            _speech?.Stop();
+            IsDictating = false;
+            return;
+        }
+        _speech ??= CreateSpeech();
+        IsDictating = _speech.Start();   // false if there's no recognizer/mic
+    }
+
+    private SpeechService CreateSpeech()
+    {
+        var s = new SpeechService();
+        var ui = Application.Current.Dispatcher;
+        s.Recognized += phrase => ui.BeginInvoke(() =>
+            Draft = string.IsNullOrWhiteSpace(Draft) ? phrase : Draft.TrimEnd() + " " + phrase);
+        s.Stopped += () => ui.BeginInvoke(() => IsDictating = false);
+        return s;
+    }
 
     [RelayCommand]
     private void Copy(ChatTurn turn) => TrySetClipboard(turn.Text);

@@ -32,6 +32,15 @@ public partial class PopoverWindow : Window
         if (DataContext is ChatViewModel vm) vm.CurrentPane = Pane.Settings;
     }
 
+    /// True while the user has pinned the window (keep open on focus loss).
+    public bool IsPinned => (DataContext as ChatViewModel)?.IsPinned ?? false;
+
+    /// Drag the header (its empty area) to reposition the floating window.
+    private void Header_Drag(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton == MouseButton.Left) DragMove();
+    }
+
     private void Composer_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         // Enter sends; Shift+Enter inserts a newline.

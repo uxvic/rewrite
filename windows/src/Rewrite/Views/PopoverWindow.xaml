@@ -169,8 +169,8 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <Grid Grid.Row="0" Margin="14,11">
+        <!-- Header (drag the empty area to move the window) -->
+        <Grid Grid.Row="0" Margin="14,11" Background="Transparent" MouseLeftButtonDown="Header_Drag">
             <Button Style="{StaticResource IconBtn}" Content="&#xE81C;" HorizontalAlignment="Left"
                     Command="{Binding ToggleHistoryCommand}" ToolTip="History" />
             <Border HorizontalAlignment="Center" CornerRadius="16" Padding="3"
@@ -187,13 +187,26 @@
                             Foreground="{Binding Mode, Converter={StaticResource ModeBrush}, ConverterParameter=Prompt.ink}" />
                 </StackPanel>
             </Border>
-            <!-- Close (in Chat) / Back (in Settings or History) -->
-            <Button Style="{StaticResource IconBtn}" Content="&#xE711;" HorizontalAlignment="Right"
-                    Click="Close_Click" ToolTip="Close"
-                    Visibility="{Binding CurrentPane, Converter={StaticResource EnumVis}, ConverterParameter=Chat}" />
-            <Button Style="{StaticResource IconBtn}" Content="&#xE72B;" HorizontalAlignment="Right"
-                    Command="{Binding ShowChatCommand}" ToolTip="Back"
-                    Visibility="{Binding CurrentPane, Converter={StaticResource EnumNotVis}, ConverterParameter=Chat}" />
+            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                <!-- Pin: keep the window open after it loses focus -->
+                <Button Content="&#xE718;" Margin="0,0,8,0" Command="{Binding TogglePinCommand}" ToolTip="Keep open (pin)"
+                        Visibility="{Binding CurrentPane, Converter={StaticResource EnumVis}, ConverterParameter=Chat}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource IconBtn}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsPinned}" Value="True">
+                                    <Setter Property="Foreground" Value="{StaticResource Accent}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <!-- Close (in Chat) / Back (in Settings or History) -->
+                <Button Style="{StaticResource IconBtn}" Content="&#xE711;" Click="Close_Click" ToolTip="Close"
+                        Visibility="{Binding CurrentPane, Converter={StaticResource EnumVis}, ConverterParameter=Chat}" />
+                <Button Style="{StaticResource IconBtn}" Content="&#xE72B;" Command="{Binding ShowChatCommand}" ToolTip="Back"
+                        Visibility="{Binding CurrentPane, Converter={StaticResource EnumNotVis}, ConverterParameter=Chat}" />
+            </StackPanel>
         </Grid>
 
         <!-- Content: Chat / Settings / History (one shown at a time) -->
@@ -239,8 +252,18 @@
                                 Visibility="{Binding IsLoading, Converter={StaticResource BoolVis}}" />
                     </Grid>
                 </Border>
-                <Button Grid.Column="2" Style="{StaticResource IconBtn}" Content="&#xE720;" Margin="8,0,0,0"
-                        IsEnabled="False" ToolTip="Dictation (coming soon)" />
+                <Button Grid.Column="2" Content="&#xE720;" Margin="8,0,0,0"
+                        Command="{Binding ToggleDictationCommand}" ToolTip="Dictate (local speech-to-text)">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource IconBtn}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsDictating}" Value="True">
+                                    <Setter Property="Foreground" Value="{StaticResource Accent}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
             </Grid>
 
             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,8,0,0">
