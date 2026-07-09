@@ -1,10 +1,13 @@
 import AppKit
 import SwiftUI
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var welcomeWindow: NSWindow?
+    /// The standalone ChatGPT-style window (opened on demand). Kept alive across
+    /// close so its conversation state persists; only nilled on quit.
+    private var mainWindow: NSWindow?
     private var clickMonitor: Any?
     private let hotKey = HotKeyManager()
 
@@ -109,6 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         guard let button = statusItem.button else { return }
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Rewrite", action: #selector(togglePopover(_:)), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Open in Window", action: #selector(showMainWindow), keyEquivalent: "n").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Welcome / Help", action: #selector(showWelcome), keyEquivalent: "").target = self
@@ -140,6 +144,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
+
+    // MARK: - Standalone ChatGPT-style window
+
+    /// Opens (or focuses) the full app window. While it's open the app becomes a
+    /// regular Dock app (icon + Cmd-Tab); it returns to a menu-bar agent on close.
+    @objc func showMainWindow() {
+        NSApp.setActivationPolicy(.regular)
+        if let w = mainWindow {
+            NSApp.activate(ignoringOtherApps: true)
+            w.makeKeyAndOrderFront(nil)
+            return
+        }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 920, height: 640),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered, defer: false)
+        window.title = "Rewrite"
+        window.titlebarAppearsTransparent = true
+        window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 760, height: 500)
+        window.center()
+        window.setFrameAutosaveName("RewriteMainWindow")   // remembers size + position
+        window.contentViewController = NSHostingController(rootView: MainWindowView())
+        window.delegate = self
+        mainWindow = window
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    /// When the main window closes, drop back to a menu-bar agent (no Dock icon).
+    func windowWillClose(_ notification: Notification) {
+        guard (notification.object as? NSWindow) === mainWindow else { return }
+        NSApp.setActivationPolicy(.accessory)
+    }
 
     @objc func togglePopover(_ sender: Any?) {
         // The menu-bar icon is a toggle: if a torn-off floating window is open,
