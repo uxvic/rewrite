@@ -179,9 +179,28 @@ public partial class ChatViewModel : ObservableObject
     [RelayCommand]
     private void Copy(ChatTurn turn) => TrySetClipboard(turn.Text);
 
+    // Retry is a menu: "Try again" (same action, a fresh variation) or "rewrite as"
+    // a specific tone — all against the turn's original source text. The target
+    // bubble is captured when the menu opens (WPF ContextMenus live outside the tree).
+    private ChatTurn? _retryTarget;
+    public void SetRetryTarget(ChatTurn turn) => _retryTarget = turn;
+
     [RelayCommand]
-    private void Retry(ChatTurn turn) =>
-        Run(turn.SystemPrompt, turn.Label, smart: turn.IsSmart, wrap: !turn.FulfillsRequest, source: turn.SourceText, variation: true);
+    private void RetryAgain()
+    {
+        if (_retryTarget is not { } turn) return;
+        Run(turn.SystemPrompt, turn.Label, smart: turn.IsSmart, wrap: !turn.FulfillsRequest,
+            source: turn.SourceText, variation: true);
+    }
+
+    [RelayCommand]
+    private void RetryAs(string actionId)
+    {
+        if (_retryTarget is not { } turn) return;
+        var action = RewriteActions.Writing.FirstOrDefault(a => a.Id == actionId);
+        if (action is null) return;
+        Run(action.SystemPrompt, action.Label, smart: false, wrap: true, source: turn.SourceText);
+    }
 
     [RelayCommand(CanExecute = nameof(CanSend))]
     private void Send()

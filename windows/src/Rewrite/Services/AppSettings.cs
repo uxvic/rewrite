@@ -1,6 +1,8 @@
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using Rewrite.Models;
+using Rewrite.Prompts;
 using Rewrite.Providers;
 
 namespace Rewrite.Services;
@@ -22,6 +24,20 @@ public sealed class AppSettings
     /// Smart send on by default (decide-and-act for plain Writing sends).
     public bool SmartIntent { get; set; } = true;
     public bool AutoCopyResult { get; set; }
+
+    /// Which action the Ctrl+Shift+Space "rewrite selection in place" runs.
+    /// "auto" = the Writing default (fix grammar + light polish); otherwise a
+    /// Writing action id (e.g. "professional").
+    public string InPlaceActionId { get; set; } = "auto";
+
+    /// True until the user has seen the welcome/onboarding once.
+    public bool DidOnboard { get; set; }
+
+    /// Resolves InPlaceActionId to a concrete action.
+    public PresetAction InPlaceAction() =>
+        InPlaceActionId == "auto"
+            ? RewriteActions.WritingDefault
+            : RewriteActions.Writing.FirstOrDefault(a => a.Id == InPlaceActionId) ?? RewriteActions.WritingDefault;
 
     /// Past rewrites for the History panel (most-recent first, capped at 20).
     public List<HistoryItem> History { get; set; } = new();

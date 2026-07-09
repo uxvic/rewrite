@@ -140,9 +140,22 @@
                     <Button Content="Copy" Style="{StaticResource MiniBtn}"
                             Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                             CommandParameter="{Binding}" />
-                    <Button Content="Retry" Style="{StaticResource MiniBtn}"
-                            Command="{Binding DataContext.RetryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                            CommandParameter="{Binding}" />
+                    <!-- Retry opens a menu: try again, or rewrite the original in a chosen tone. -->
+                    <Button Content="Retry ▾" Style="{StaticResource MiniBtn}" Click="Retry_Click">
+                        <Button.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Try again" Command="{Binding RetryAgainCommand}" />
+                                <Separator />
+                                <MenuItem Header="Professional" Command="{Binding RetryAsCommand}" CommandParameter="professional" />
+                                <MenuItem Header="Casual"       Command="{Binding RetryAsCommand}" CommandParameter="casual" />
+                                <MenuItem Header="Friendly"     Command="{Binding RetryAsCommand}" CommandParameter="friendly" />
+                                <MenuItem Header="Shorter"      Command="{Binding RetryAsCommand}" CommandParameter="shorter" />
+                                <MenuItem Header="Longer"       Command="{Binding RetryAsCommand}" CommandParameter="longer" />
+                                <MenuItem Header="Fix Grammar"  Command="{Binding RetryAsCommand}" CommandParameter="grammar" />
+                                <MenuItem Header="Paraphrase"   Command="{Binding RetryAsCommand}" CommandParameter="paraphrase" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
                 </StackPanel>
             </StackPanel>
         </DataTemplate>

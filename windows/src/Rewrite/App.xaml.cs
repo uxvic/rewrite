@@ -33,8 +33,13 @@ public partial class App : Application
 
         _hotkey = new HotkeyService();
         _hotkey.Pressed += ToggleWindow;
+        _hotkey.InPlacePressed += OnInPlaceRewrite;
         _hotkey.Register();
     }
+
+    /// Ctrl+Shift+Space: rewrite the selected text in the focused app, in place.
+    /// Fire-and-forget; the service leaves our window untouched so focus stays put.
+    private void OnInPlaceRewrite() => _ = TextReplacementService.RewriteSelectionAsync(AppSettings.Shared);
 
     private ContextMenu BuildMenu()
     {

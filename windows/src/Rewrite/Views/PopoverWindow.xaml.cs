@@ -1,5 +1,7 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+using Rewrite.Models;
 using Rewrite.Services;
 using Rewrite.ViewModels;
 
@@ -47,4 +49,19 @@ public partial class PopoverWindow : Window
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Hide();
+
+    /// Open the Retry menu, capturing which bubble it belongs to (a WPF ContextMenu
+    /// lives outside the visual tree, so we set its DataContext to the view model).
+    private void Retry_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: ChatTurn turn } btn) return;
+        if (DataContext is not ChatViewModel vm) return;
+        vm.SetRetryTarget(turn);
+        if (btn.ContextMenu is { } menu)
+        {
+            menu.DataContext = vm;
+            menu.PlacementTarget = btn;
+            menu.IsOpen = true;
+        }
+    }
 }
