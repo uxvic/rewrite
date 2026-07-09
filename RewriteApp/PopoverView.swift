@@ -4,9 +4,9 @@ import Combine
 
 /// One message in the rewrite conversation. User turns hold the source text;
 /// assistant turns hold a rewrite (streamed in) plus the action that produced it.
-struct ChatTurn: Identifiable, Equatable {
-    enum Role { case user, assistant, setup, whatsNew }
-    let id = UUID()
+struct ChatTurn: Identifiable, Equatable, Codable {
+    enum Role: String, Codable { case user, assistant, setup, whatsNew }
+    var id = UUID()
     var role: Role
     var text: String
     var actionLabel: String = ""

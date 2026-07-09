@@ -35,6 +35,7 @@
 		3A0000000000000000000019 /* AutoScrollTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000019 /* AutoScrollTextEditor.swift */; };
 		3A000000000000000000001A /* VoiceOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A000000000000000000001A /* VoiceOverlayView.swift */; };
 		3A000000000000000000001B /* StrandsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A000000000000000000001B /* StrandsView.swift */; };
+		3A000000000000000000001C /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A000000000000000000001C /* Conversation.swift */; };
 		3A0000000000000000000020 /* Sparkle.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000020 /* Sparkle.framework */; };
 		3C0000000000000000000020 /* Sparkle.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000020 /* Sparkle.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -70,6 +71,7 @@
 		2A0000000000000000000019 /* AutoScrollTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoScrollTextEditor.swift; sourceTree = "<group>"; };
 		2A000000000000000000001A /* VoiceOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceOverlayView.swift; sourceTree = "<group>"; };
 		2A000000000000000000001B /* StrandsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrandsView.swift; sourceTree = "<group>"; };
+		2A000000000000000000001C /* Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Conversation.swift; sourceTree = "<group>"; };
 		2A0000000000000000000020 /* Sparkle.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Sparkle.framework; path = Frameworks/Sparkle.framework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -145,6 +147,7 @@
 				2A0000000000000000000019 /* AutoScrollTextEditor.swift */,
 				2A000000000000000000001A /* VoiceOverlayView.swift */,
 				2A000000000000000000001B /* StrandsView.swift */,
+				2A000000000000000000001C /* Conversation.swift */,
 				2A0000000000000000000016 /* AppIcon.icns */,
 				2A0000000000000000000021 /* PrivacyInfo.xcprivacy */,
 				1A0000000000000000000010 /* Info.plist */,
@@ -249,6 +252,7 @@
 				3A0000000000000000000019 /* AutoScrollTextEditor.swift in Sources */,
 				3A000000000000000000001A /* VoiceOverlayView.swift in Sources */,
 				3A000000000000000000001B /* StrandsView.swift in Sources */,
+				3A000000000000000000001C /* Conversation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
