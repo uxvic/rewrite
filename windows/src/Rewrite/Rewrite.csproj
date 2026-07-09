@@ -10,6 +10,8 @@
     <RootNamespace>Rewrite</RootNamespace>
     <Version>0.1.0</Version>
     <Product>Rewrite</Product>
+    <!-- Custom entry point so Velopack's install/update hooks run before WPF. -->
+    <StartupObject>Rewrite.Program</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +19,7 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
     <PackageReference Include="System.Speech" Version="8.0.0" />
+    <PackageReference Include="Velopack" Version="0.0.*" />
   </ItemGroup>
 
 </Project>

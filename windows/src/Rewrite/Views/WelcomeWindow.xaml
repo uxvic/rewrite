@@ -1,0 +1,73 @@
+<Window x:Class="Rewrite.Views.WelcomeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Welcome to Rewrite"
+        Width="470" Height="470"
+        WindowStyle="None" AllowsTransparency="False" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" ShowInTaskbar="True" Background="Transparent"
+        FontFamily="Segoe UI" UseLayoutRounding="True">
+
+    <Window.Resources>
+        <!-- One feature row: glyph + title + subtitle -->
+        <Style x:Key="RowGlyph" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="Foreground" Value="{StaticResource Accent}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Width" Value="34" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="#240B0B0F" MouseLeftButtonDown="Drag">
+        <StackPanel Margin="34,30,34,26">
+            <TextBlock Text="✦  Welcome to Rewrite" FontSize="22" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimary}" />
+            <TextBlock Text="A private writing assistant in your tray — rewrite, reply, and polish anywhere."
+                       FontSize="13.5" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap"
+                       Margin="0,8,0,24" />
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                <TextBlock Style="{StaticResource RowGlyph}" Text="&#xE765;" />
+                <StackPanel>
+                    <TextBlock Text="Ctrl + Space" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" />
+                    <TextBlock Text="Open Rewrite from anywhere." FontSize="12.5" Foreground="{StaticResource TextSecondary}" />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                <TextBlock Style="{StaticResource RowGlyph}" Text="&#xE70F;" />
+                <StackPanel>
+                    <TextBlock Text="Ctrl + Shift + Space" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" />
+                    <TextBlock Text="Rewrite the text you've selected in any app, in place." FontSize="12.5" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                <TextBlock Style="{StaticResource RowGlyph}" Text="&#xE720;" />
+                <StackPanel>
+                    <TextBlock Text="Dictate, retry in any tone, pin to keep open" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" />
+                    <TextBlock Text="Talk instead of typing; redo a result as Professional, Casual, and more." FontSize="12.5" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <TextBlock Style="{StaticResource RowGlyph}" Text="&#xE713;" />
+                <StackPanel>
+                    <TextBlock Text="Choose your AI" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" />
+                    <TextBlock Text="Add an Anthropic API key, or run a local model with Ollama — in Settings." FontSize="12.5" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" />
+                </StackPanel>
+            </StackPanel>
+
+            <Button Click="Close_Click" Cursor="Hand" HorizontalAlignment="Left" Margin="0,26,0,0">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border CornerRadius="12" Background="{StaticResource Accent}" Padding="26,10">
+                            <TextBlock Text="Get started" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentInk}" />
+                        </Border>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </StackPanel>
+    </Grid>
+</Window>

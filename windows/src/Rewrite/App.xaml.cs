@@ -36,6 +36,15 @@ public partial class App : Application
         _hotkey.Pressed += ToggleWindow;
         _hotkey.InPlacePressed += OnInPlaceRewrite;
         _hotkey.Register();
+
+        if (!AppSettings.Shared.DidOnboard)
+        {
+            AppSettings.Shared.DidOnboard = true;
+            AppSettings.Shared.Save();
+            new WelcomeWindow().Show();
+        }
+
+        _ = UpdateService.CheckAsync();   // silent background auto-update (Velopack)
     }
 
     /// Ctrl+Shift+Space: rewrite the selected text in the focused app, in place.

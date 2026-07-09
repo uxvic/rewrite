@@ -1,8 +1,8 @@
 name: windows-build
 
-# Builds the Windows app on a GitHub-hosted Windows runner and uploads a
-# self-contained x64 build as an artifact (so "build for Windows users" works
-# without a local Windows machine). Velopack installer packaging comes in M4.
+# Builds the Windows app on a GitHub-hosted Windows runner. Uploads two artifacts:
+# a self-contained single-file portable exe (Rewrite-win-x64) and a Velopack
+# installer + update feed (Rewrite-Setup) that a real download/auto-update uses.
 
 on:
   push:
@@ -39,3 +39,27 @@ jobs:
         with:
           name: Rewrite-win-x64
           path: publish
+
+      # --- Velopack installer + update feed -------------------------------
+      # Velopack packages a loose (non-single-file) folder publish; it replaces
+      # files in place on update, so we publish separately for it.
+      - name: Publish for Velopack (folder, self-contained)
+        run: >
+          dotnet publish windows/src/Rewrite/Rewrite.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=false
+          -o publish-vpk
+
+      - name: Install Velopack CLI
+        run: dotnet tool install -g vpk
+
+      - name: Package installer (Velopack)
+        shell: pwsh
+        run: |
+          $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
+          vpk pack --packId Rewrite --packVersion 1.0.0 --packDir publish-vpk --mainExe Rewrite.exe -o Releases
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Rewrite-Setup
+          path: Releases
