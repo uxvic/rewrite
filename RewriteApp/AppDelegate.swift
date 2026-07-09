@@ -64,6 +64,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             UserDefaults.standard.set(true, forKey: "didOnboard")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.showWelcome() }
         }
+
+        // Launch like a normal app: open the main window (Dock icon + Cmd-Tab).
+        // The menu-bar ✦ stays for the quick popover + the in-place hotkey.
+        showMainWindow()
+    }
+
+    /// Relaunching from Launchpad/Finder/Spotlight (or clicking the Dock icon)
+    /// reopens the window even after we've dropped back to a menu-bar agent.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { showMainWindow() }
+        return true
     }
 
     @objc private func showWelcome() {
