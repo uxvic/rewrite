@@ -190,11 +190,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         window.maxSize = NSSize(width: 1040, height: CGFloat.greatestFiniteMagnitude)
         window.setContentSize(NSSize(width: 1000, height: 680))
         window.center()
-        window.setFrameAutosaveName("RewriteMainWindow")   // remembers size (clamped to min/max)
+        window.setFrameAutosaveName("RewriteMainWindow")   // remembers size
+
+        // A frame saved before the cap (or restored too wide) — clamp it now.
+        if window.frame.width > Self.maxWindowWidth {
+            var f = window.frame
+            f.size.width = Self.maxWindowWidth
+            window.setFrame(f, display: false)
+        }
 
         mainWindow = window
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+    }
+
+    /// Hard cap on the main window's width (System-Settings style: no wider, any taller).
+    private static let maxWindowWidth: CGFloat = 1040
+
+    /// Bulletproof width cap: clamp every resize (maxSize alone was being overridden
+    /// by the SwiftUI hosting controller). Height is unconstrained here.
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        guard sender === mainWindow else { return frameSize }
+        return NSSize(width: min(frameSize.width, Self.maxWindowWidth), height: frameSize.height)
     }
 
     /// When the main window closes, drop back to a menu-bar agent (no Dock icon).
