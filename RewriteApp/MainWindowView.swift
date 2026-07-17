@@ -36,18 +36,36 @@ struct MainWindowView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
+            // Writing / Prompt — the top-level mode switch lives in the side nav.
+            HStack(spacing: 0) {
+                ForEach(RewriteMode.allCases) { m in
+                    Button { switchMode(m) } label: {
+                        Text(m == .writing ? "Writing" : "Prompt")
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(engine.mode == m ? Theme.accentInk : Theme.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(engine.mode == m ? Theme.accent : Color.clear, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(4)
+            .background(Theme.fillTranslucent.opacity(0.06), in: Capsule())
+            .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 10)
+
             HStack {
-                Text("Chats").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                Text("Chats").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
                 Spacer()
                 Button(action: newChat) {
                     Image(systemName: "square.and.pencil").font(.system(size: 14, weight: .semibold))
                 }
                 .buttonStyle(.plain).foregroundStyle(Theme.accent).help("New chat")
             }
-            .padding(.horizontal, 14).padding(.vertical, 12)
+            .padding(.horizontal, 14).padding(.bottom, 6)
 
             List(selection: $selection) {
-                ForEach(store.conversations) { c in
+                ForEach(store.conversations.filter { $0.mode == engine.mode }) { c in
                     Text(c.title.isEmpty ? "New chat" : c.title)
                         .lineLimit(1)
                         .foregroundStyle(Theme.textPrimary)
@@ -66,30 +84,11 @@ struct MainWindowView: View {
 
     private var chat: some View {
         VStack(spacing: 0) {
-            modeBar
-            Divider().opacity(0.4)
             messages
             Divider().opacity(0.4)
             composer
         }
         .background(Theme.bg.ignoresSafeArea())
-    }
-
-    private var modeBar: some View {
-        HStack {
-            ForEach(RewriteMode.allCases) { m in
-                Button { switchMode(m) } label: {
-                    Text(m == .writing ? "Writing" : "Prompt")
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(engine.mode == m ? Theme.accentInk : Theme.textSecondary)
-                        .padding(.horizontal, 14).padding(.vertical, 6)
-                        .background(engine.mode == m ? Theme.accent : Color.clear, in: Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 16).padding(.vertical, 10)
     }
 
     private var messages: some View {
@@ -234,9 +233,11 @@ struct MainWindowView: View {
     }
 
     private func delete(_ id: UUID) {
+        let mode = engine.conversation.mode
         store.delete(id)
         if engine.conversation.id == id {
-            let next = store.conversations.first ?? store.create()
+            // Stay in the same mode after deleting the open chat.
+            let next = store.conversations.first(where: { $0.mode == mode }) ?? store.create(mode: mode)
             engine.open(next)
             selection = next.id
         }
