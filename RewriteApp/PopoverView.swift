@@ -385,19 +385,19 @@ struct PopoverView: View {
     private var actionBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
-                // Writing only: Smart governs the plain (no-action) send. It's
-                // mutually exclusive with the explicit actions — picking one
-                // deselects the others. `smartIntent` stays the persistent default;
-                // a picked action is a per-send override that hides Smart's highlight.
-                if settings.mode == .writing {
-                    selectableChip(icon: "sparkles", label: "Smart",
-                                   selected: settings.smartIntent && selectedAction == nil && composerMode == .text) {
-                        let smartActive = settings.smartIntent && selectedAction == nil && composerMode == .text
-                        selectedAction = nil
-                        composerMode = .text
-                        showSelectPrompt = false
-                        settings.smartIntent = !smartActive
-                    }
+                // Smart governs the plain (no-action) send in BOTH modes: Writing
+                // polishes text or fulfills a request; Prompt optimizes a draft prompt
+                // or just does it when the input is really content/a request. It's
+                // mutually exclusive with the explicit actions — picking one deselects
+                // the others. `smartIntent` stays the persistent default; a picked
+                // action is a per-send override that hides Smart's highlight.
+                selectableChip(icon: "sparkles", label: "Smart",
+                               selected: settings.smartIntent && selectedAction == nil && composerMode == .text) {
+                    let smartActive = settings.smartIntent && selectedAction == nil && composerMode == .text
+                    selectedAction = nil
+                    composerMode = .text
+                    showSelectPrompt = false
+                    settings.smartIntent = !smartActive
                 }
                 ForEach(Array(settings.mode.actions.enumerated()), id: \.element.id) { idx, action in
                     selectableChip(icon: action.systemImage, label: action.label,
@@ -650,11 +650,12 @@ struct PopoverView: View {
             run(systemPrompt: RewriteAction.customSystemPrompt(t), label: "Custom: \(t)")
             return
         }
-        // Smart plain send (Writing, no explicit action): one decide-and-act pass
-        // that polishes text or fulfills a request, labeled once it self-tags.
-        if selectedAction == nil && settings.mode == .writing && settings.smartIntent {
+        // Smart plain send (no explicit action): one decide-and-act pass. In Writing
+        // it polishes text or fulfills a request; in Prompt it optimizes a draft
+        // prompt or — when the input is really content/a request — just does it.
+        if selectedAction == nil && settings.smartIntent {
             addUserTurn(t)
-            run(systemPrompt: "", label: "Improve", smart: true)
+            run(systemPrompt: "", label: settings.mode == .prompt ? "Optimize" : "Improve", smart: true)
             return
         }
         // No explicit action picked → apply the mode's sensible default
@@ -693,7 +694,10 @@ struct PopoverView: View {
 
         // Smart uses its own single prompt and never wraps (it may legitimately
         // "answer" a request); the label is provisional until the tag resolves.
-        let prompt = smart ? RewriteAction.smartSystemPrompt : systemPrompt
+        // Prompt mode gets a Smart that optimizes-or-fulfills; Writing polishes-or-fulfills.
+        let prompt = smart
+            ? (runMode == .prompt ? RewriteAction.promptSmartSystemPrompt : RewriteAction.smartSystemPrompt)
+            : systemPrompt
         let turn = ChatTurn(role: .assistant, text: "", actionLabel: label,
                             systemPrompt: prompt, isStreaming: true, sourceText: src,
                             fulfillsRequest: !wrap && !smart, isSmart: smart)

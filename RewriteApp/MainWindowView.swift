@@ -196,9 +196,7 @@ struct MainWindowView: View {
     private var actionChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
-                if engine.mode == .writing {
-                    chip("✦ Smart", active: engine.smartActive) { engine.toggleSmart() }
-                }
+                chip("✦ Smart", active: engine.smartActive) { engine.toggleSmart() }
                 ForEach(engine.actions) { a in
                     chip(a.label, active: engine.selectedActionID == a.id) { engine.selectAction(a.id) }
                 }
