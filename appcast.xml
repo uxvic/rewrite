@@ -3,15 +3,12 @@
     <channel>
         <title>Rewrite</title>
         <item>
-            <title>1.7.2</title>
-            <pubDate>Wed, 01 Jul 2026 05:53:08 +0100</pubDate>
-            <sparkle:version>1.7.2</sparkle:version>
-            <sparkle:shortVersionString>1.7.2</sparkle:shortVersionString>
+            <title>1.8.0</title>
+            <pubDate>Fri, 17 Jul 2026 17:17:37 +0100</pubDate>
+            <sparkle:version>1.8.0</sparkle:version>
+            <sparkle:shortVersionString>1.8.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Rewrite 1.7.2</h2>
-<p>Retry now lets you pick a tone (Professional, Casual, and more). Fixes for typing in the docked window and closing it from the menu bar.</p>
-]]></description>
-            <enclosure url="https://github.com/uxvic/rewrite/releases/download/v1.7.2/Rewrite-1.7.2.zip" length="2422119" type="application/octet-stream" sparkle:edSignature="ESA3Ucl3WrfExH9RsxL5QoBytnYExdXrHG6Vj4+laJED5CBB83cMIP7b3e+3AkVR6tP/rc2LhecLJ7HJSa47Bg=="/>
+            <enclosure url="https://github.com/uxvic/rewrite/releases/download/v1.8.0/Rewrite-1.8.0.zip" length="2657081" type="application/octet-stream" sparkle:edSignature="2NpgXwMAIVJnd+oZG9J/UCQ0aDaFZJuI/CyvvaBMBSnmEKgasPvnog6RbnsdjCYLsJKtYBGXhojZbKismM+YCw=="/>
         </item>
     </channel>
 </rss>
