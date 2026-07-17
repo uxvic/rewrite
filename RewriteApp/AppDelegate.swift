@@ -168,13 +168,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             return
         }
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 920, height: 640),
+            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 680),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)
         window.title = "Rewrite"
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 760, height: 500)
+        // Like System Settings: capped width (can't be dragged wider, so the content
+        // layout stays controlled) but freely resizable taller.
+        window.minSize = NSSize(width: 820, height: 480)
+        window.maxSize = NSSize(width: 1040, height: CGFloat.greatestFiniteMagnitude)
         window.center()
         window.setFrameAutosaveName("RewriteMainWindow")   // remembers size + position
         window.contentViewController = NSHostingController(rootView: MainWindowView())
