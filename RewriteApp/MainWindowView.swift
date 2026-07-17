@@ -78,7 +78,7 @@ struct MainWindowView: View {
     private var modeBar: some View {
         HStack {
             ForEach(RewriteMode.allCases) { m in
-                Button { engine.setMode(m) } label: {
+                Button { switchMode(m) } label: {
                     Text(m == .writing ? "Writing" : "Prompt")
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(engine.mode == m ? Theme.accentInk : Theme.textSecondary)
@@ -216,6 +216,16 @@ struct MainWindowView: View {
     }
 
     // MARK: - Actions
+
+    /// Writing and Prompt are separate threads: switching the mode opens that
+    /// mode's most-recent conversation (starting a fresh one if there isn't any),
+    /// instead of relabeling the current thread.
+    private func switchMode(_ m: RewriteMode) {
+        guard m != engine.conversation.mode else { return }
+        let target = store.conversations.first(where: { $0.mode == m }) ?? store.create(mode: m)
+        engine.open(target)
+        selection = target.id
+    }
 
     private func newChat() {
         let c = store.create(mode: engine.conversation.mode)
