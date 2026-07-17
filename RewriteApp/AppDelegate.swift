@@ -174,14 +174,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         window.title = "Rewrite"
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
+
+        // Host the SwiftUI content and STOP it from driving the window size —
+        // NSHostingController otherwise overrides the min/max we set (that's why the
+        // width cap wasn't sticking).
+        let hosting = NSHostingController(rootView: MainWindowView())
+        hosting.sizingOptions = []
+        window.contentViewController = hosting
+        window.delegate = self
+
         // Like System Settings: capped width (can't be dragged wider, so the content
-        // layout stays controlled) but freely resizable taller.
+        // layout stays controlled) but freely resizable taller. Set AFTER the content
+        // controller so they stick.
         window.minSize = NSSize(width: 820, height: 480)
         window.maxSize = NSSize(width: 1040, height: CGFloat.greatestFiniteMagnitude)
+        window.setContentSize(NSSize(width: 1000, height: 680))
         window.center()
-        window.setFrameAutosaveName("RewriteMainWindow")   // remembers size + position
-        window.contentViewController = NSHostingController(rootView: MainWindowView())
-        window.delegate = self
+        window.setFrameAutosaveName("RewriteMainWindow")   // remembers size (clamped to min/max)
+
         mainWindow = window
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
