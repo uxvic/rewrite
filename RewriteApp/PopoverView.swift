@@ -1202,14 +1202,14 @@ struct WhatsNewCardView: View {
     }
 
     private let highlights: [Highlight] = [
-        .init(icon: "sparkles", title: "Smart just gets it",
-              blurb: "Type and send — Rewrite figures out whether to polish your text or actually draft what you asked for, and follow-ups refine it in place instead of starting over."),
-        .init(icon: "circle.hexagongrid.fill", title: "A lighter, glass look",
-              blurb: "A floating Big Sur–style glass interface — your chat flows behind the controls instead of behind a solid bar."),
-        .init(icon: "return", title: "Send with Enter",
-              blurb: "Press Enter to send (Shift+Enter for a new line), and the input now scrolls smoothly for longer text."),
-        .init(icon: "arrow.left.arrow.right", title: "Your draft follows you",
-              blurb: "Start typing in Writing and switch to Prompt — your text comes along instead of getting lost.")
+        .init(icon: "macwindow", title: "A full app window",
+              blurb: "Open Rewrite as a resizable app from the Dock or Launchpad, with a conversations sidebar — your chats are saved and you pick up right where you left off."),
+        .init(icon: "sparkles", title: "Smart in Prompt mode too",
+              blurb: "In Prompt mode, Smart now decides for you: it sharpens a rough prompt, or — if you actually pasted something to write — just does it, instead of getting stuck."),
+        .init(icon: "sidebar.left", title: "Chats, kept tidy",
+              blurb: "Writing and Prompt keep separate threads, each in its own list, so your conversations never get tangled."),
+        .init(icon: "gearshape", title: "Settings within reach",
+              blurb: "Providers, your API key, models and presets are one click away — in the menu bar and at the bottom of the app's sidebar.")
     ]
 
     var body: some View {
