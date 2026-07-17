@@ -133,10 +133,34 @@ enum RewriteAction: String, CaseIterable, Identifiable {
     language.
     """
 
-    /// Parses a Smart reply's leading [REWRITE]/[REQUEST] tag. Returns the turn
-    /// label ("Improve"/"Request") once resolvable, plus the body with the tag
-    /// stripped. While only a partial leading tag has arrived, `body` is empty so
-    /// the bubble stays on typing-dots (no tag flicker); if the model ignored the
+    /// Smart decide-and-act for PROMPT mode. Optimizes a draft prompt, OR — when the
+    /// input is really content or a request to carry out — just does it (produces the
+    /// finished text) instead of forcing it through the prompt optimizer. Self-tags
+    /// so the turn can be labeled: [PROMPT] (optimized) or [REQUEST] (produced).
+    static let promptSmartSystemPrompt = """
+    You are a writing assistant inside a menu-bar app, in "Prompt" mode. Read the user's message and do \
+    EXACTLY ONE of these:
+    - If it is a DRAFT PROMPT meant to be fed to an AI model (rough instructions or a spec you'd give an \
+    AI), improve the PROMPT ITSELF: rewrite it into a clear, effective prompt — an appropriate expert \
+    role, an explicit task, the necessary context, sensible constraints, and a specified output format \
+    — preserving the user's intent. Do NOT execute it.
+    - If it is a request or instruction asking you to PRODUCE or DO something (e.g. "write an email…", \
+    "reply to this", "summarise this…"), or a piece of content to act on, carry it out and write the \
+    finished text the user can paste.
+
+    The input may be a single message, OR the recent conversation (lines starting with "User:" and \
+    "You:") ending in a new follow-up. When it's a conversation, the final "User:" line is a follow-up — \
+    revise or extend what you last wrote under "You:" to incorporate it, rather than starting a new task.
+
+    Begin your reply with a tag on its very first line, by itself: [PROMPT] if you improved a prompt, or \
+    [REQUEST] if you produced or did something. Then put the result on the following lines. Output ONLY \
+    that tag line and the result — no preamble, no quotes, no explanation. Preserve the user's language.
+    """
+
+    /// Parses a Smart reply's leading [REWRITE]/[REQUEST]/[PROMPT] tag. Returns the
+    /// turn label ("Improve"/"Request"/"Optimize") once resolvable, plus the body with
+    /// the tag stripped. While only a partial leading tag has arrived, `body` is empty
+    /// so the bubble stays on typing-dots (no tag flicker); if the model ignored the
     /// format entirely, returns `(nil, raw)` so the text still shows.
     static func parseSmart(_ raw: String) -> (label: String?, body: String) {
         let s = String(raw.drop { $0 == " " || $0 == "\n" || $0 == "\t" })
@@ -146,6 +170,9 @@ enum RewriteAction: String, CaseIterable, Identifiable {
         }
         if upper.hasPrefix("[REQUEST]") {
             return ("Request", smartBody(s, after: "[REQUEST]"))
+        }
+        if upper.hasPrefix("[PROMPT]") {
+            return ("Optimize", smartBody(s, after: "[PROMPT]"))
         }
         // A leading bracket tag is still streaming in — withhold to avoid flicker.
         if s.hasPrefix("[") && s.count < 9 && !s.contains(where: { $0 == "\n" }) {

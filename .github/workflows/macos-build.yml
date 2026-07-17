@@ -1,0 +1,36 @@
+name: macos-build
+
+# Compile-checks the macOS app on a GitHub-hosted macOS runner, so changes can be
+# verified without a local Mac. Builds the Rewrite target (Debug, unsigned) — the
+# on-device provider is guarded by `#if canImport(FoundationModels)`, so it also
+# compiles on runners without the macOS 26 SDK.
+
+on:
+  push:
+    branches: [ "claude/kind-brahmagupta-nii3ih" ]
+    paths:
+      - "RewriteApp/**"
+      - "RewriteApp.xcodeproj/**"
+      - "Frameworks/**"
+      - ".github/workflows/macos-build.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Build (Debug, unsigned)
+        run: |
+          xcodebuild \
+            -project RewriteApp.xcodeproj \
+            -target Rewrite \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build

@@ -1,10 +1,13 @@
 import AppKit
 import SwiftUI
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var welcomeWindow: NSWindow?
+    /// The standalone ChatGPT-style window (opened on demand). Kept alive across
+    /// close so its conversation state persists; only nilled on quit.
+    private var mainWindow: NSWindow?
     private var clickMonitor: Any?
     private let hotKey = HotKeyManager()
 
@@ -61,6 +64,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             UserDefaults.standard.set(true, forKey: "didOnboard")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.showWelcome() }
         }
+
+        // Launch like a normal app: open the main window (Dock icon + Cmd-Tab).
+        // The menu-bar ✦ stays for the quick popover + the in-place hotkey.
+        showMainWindow()
+    }
+
+    /// Relaunching from Launchpad/Finder/Spotlight (or clicking the Dock icon)
+    /// reopens the window even after we've dropped back to a menu-bar agent.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { showMainWindow() }
+        return true
     }
 
     @objc private func showWelcome() {
@@ -109,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         guard let button = statusItem.button else { return }
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Rewrite", action: #selector(togglePopover(_:)), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Open in Window", action: #selector(showMainWindow), keyEquivalent: "n").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Welcome / Help", action: #selector(showWelcome), keyEquivalent: "").target = self
@@ -140,6 +155,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
+
+    // MARK: - Standalone ChatGPT-style window
+
+    /// Opens (or focuses) the full app window. While it's open the app becomes a
+    /// regular Dock app (icon + Cmd-Tab); it returns to a menu-bar agent on close.
+    @objc func showMainWindow() {
+        NSApp.setActivationPolicy(.regular)
+        if let w = mainWindow {
+            NSApp.activate(ignoringOtherApps: true)
+            w.makeKeyAndOrderFront(nil)
+            return
+        }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 680),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered, defer: false)
+        window.title = "Rewrite"
+        window.titlebarAppearsTransparent = true
+        window.isReleasedWhenClosed = false
+
+        // Host the SwiftUI content and STOP it from driving the window size —
+        // NSHostingController otherwise overrides the min/max we set (that's why the
+        // width cap wasn't sticking).
+        let hosting = NSHostingController(rootView: MainWindowView())
+        hosting.sizingOptions = []
+        window.contentViewController = hosting
+        window.delegate = self
+
+        // Like System Settings: capped width (can't be dragged wider, so the content
+        // layout stays controlled) but freely resizable taller. Set AFTER the content
+        // controller so they stick.
+        window.minSize = NSSize(width: 820, height: 480)
+        window.maxSize = NSSize(width: 1040, height: CGFloat.greatestFiniteMagnitude)
+        window.setContentSize(NSSize(width: 1000, height: 680))
+        window.center()
+        window.setFrameAutosaveName("RewriteMainWindow")   // remembers size
+
+        // A frame saved before the cap (or restored too wide) — clamp it now.
+        if window.frame.width > Self.maxWindowWidth {
+            var f = window.frame
+            f.size.width = Self.maxWindowWidth
+            window.setFrame(f, display: false)
+        }
+
+        mainWindow = window
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    /// Hard cap on the main window's width (System-Settings style: no wider, any taller).
+    private static let maxWindowWidth: CGFloat = 1040
+
+    /// Bulletproof width cap: clamp every resize (maxSize alone was being overridden
+    /// by the SwiftUI hosting controller). Height is unconstrained here.
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        guard sender === mainWindow else { return frameSize }
+        return NSSize(width: min(frameSize.width, Self.maxWindowWidth), height: frameSize.height)
+    }
+
+    /// When the main window closes, drop back to a menu-bar agent (no Dock icon).
+    func windowWillClose(_ notification: Notification) {
+        guard (notification.object as? NSWindow) === mainWindow else { return }
+        NSApp.setActivationPolicy(.accessory)
+    }
 
     @objc func togglePopover(_ sender: Any?) {
         // The menu-bar icon is a toggle: if a torn-off floating window is open,

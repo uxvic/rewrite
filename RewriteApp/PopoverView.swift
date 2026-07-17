@@ -4,9 +4,9 @@ import Combine
 
 /// One message in the rewrite conversation. User turns hold the source text;
 /// assistant turns hold a rewrite (streamed in) plus the action that produced it.
-struct ChatTurn: Identifiable, Equatable {
-    enum Role { case user, assistant, setup, whatsNew }
-    let id = UUID()
+struct ChatTurn: Identifiable, Equatable, Codable {
+    enum Role: String, Codable { case user, assistant, setup, whatsNew }
+    var id = UUID()
     var role: Role
     var text: String
     var actionLabel: String = ""
@@ -385,19 +385,19 @@ struct PopoverView: View {
     private var actionBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
-                // Writing only: Smart governs the plain (no-action) send. It's
-                // mutually exclusive with the explicit actions — picking one
-                // deselects the others. `smartIntent` stays the persistent default;
-                // a picked action is a per-send override that hides Smart's highlight.
-                if settings.mode == .writing {
-                    selectableChip(icon: "sparkles", label: "Smart",
-                                   selected: settings.smartIntent && selectedAction == nil && composerMode == .text) {
-                        let smartActive = settings.smartIntent && selectedAction == nil && composerMode == .text
-                        selectedAction = nil
-                        composerMode = .text
-                        showSelectPrompt = false
-                        settings.smartIntent = !smartActive
-                    }
+                // Smart governs the plain (no-action) send in BOTH modes: Writing
+                // polishes text or fulfills a request; Prompt optimizes a draft prompt
+                // or just does it when the input is really content/a request. It's
+                // mutually exclusive with the explicit actions — picking one deselects
+                // the others. `smartIntent` stays the persistent default; a picked
+                // action is a per-send override that hides Smart's highlight.
+                selectableChip(icon: "sparkles", label: "Smart",
+                               selected: settings.smartIntent && selectedAction == nil && composerMode == .text) {
+                    let smartActive = settings.smartIntent && selectedAction == nil && composerMode == .text
+                    selectedAction = nil
+                    composerMode = .text
+                    showSelectPrompt = false
+                    settings.smartIntent = !smartActive
                 }
                 ForEach(Array(settings.mode.actions.enumerated()), id: \.element.id) { idx, action in
                     selectableChip(icon: action.systemImage, label: action.label,
@@ -650,11 +650,12 @@ struct PopoverView: View {
             run(systemPrompt: RewriteAction.customSystemPrompt(t), label: "Custom: \(t)")
             return
         }
-        // Smart plain send (Writing, no explicit action): one decide-and-act pass
-        // that polishes text or fulfills a request, labeled once it self-tags.
-        if selectedAction == nil && settings.mode == .writing && settings.smartIntent {
+        // Smart plain send (no explicit action): one decide-and-act pass. In Writing
+        // it polishes text or fulfills a request; in Prompt it optimizes a draft
+        // prompt or — when the input is really content/a request — just does it.
+        if selectedAction == nil && settings.smartIntent {
             addUserTurn(t)
-            run(systemPrompt: "", label: "Improve", smart: true)
+            run(systemPrompt: "", label: settings.mode == .prompt ? "Optimize" : "Improve", smart: true)
             return
         }
         // No explicit action picked → apply the mode's sensible default
@@ -693,7 +694,10 @@ struct PopoverView: View {
 
         // Smart uses its own single prompt and never wraps (it may legitimately
         // "answer" a request); the label is provisional until the tag resolves.
-        let prompt = smart ? RewriteAction.smartSystemPrompt : systemPrompt
+        // Prompt mode gets a Smart that optimizes-or-fulfills; Writing polishes-or-fulfills.
+        let prompt = smart
+            ? (runMode == .prompt ? RewriteAction.promptSmartSystemPrompt : RewriteAction.smartSystemPrompt)
+            : systemPrompt
         let turn = ChatTurn(role: .assistant, text: "", actionLabel: label,
                             systemPrompt: prompt, isStreaming: true, sourceText: src,
                             fulfillsRequest: !wrap && !smart, isSmart: smart)
@@ -1198,14 +1202,14 @@ struct WhatsNewCardView: View {
     }
 
     private let highlights: [Highlight] = [
-        .init(icon: "sparkles", title: "Smart just gets it",
-              blurb: "Type and send — Rewrite figures out whether to polish your text or actually draft what you asked for, and follow-ups refine it in place instead of starting over."),
-        .init(icon: "circle.hexagongrid.fill", title: "A lighter, glass look",
-              blurb: "A floating Big Sur–style glass interface — your chat flows behind the controls instead of behind a solid bar."),
-        .init(icon: "return", title: "Send with Enter",
-              blurb: "Press Enter to send (Shift+Enter for a new line), and the input now scrolls smoothly for longer text."),
-        .init(icon: "arrow.left.arrow.right", title: "Your draft follows you",
-              blurb: "Start typing in Writing and switch to Prompt — your text comes along instead of getting lost.")
+        .init(icon: "macwindow", title: "A full app window",
+              blurb: "Open Rewrite as a resizable app from the Dock or Launchpad, with a conversations sidebar — your chats are saved and you pick up right where you left off."),
+        .init(icon: "sparkles", title: "Smart in Prompt mode too",
+              blurb: "In Prompt mode, Smart now decides for you: it sharpens a rough prompt, or — if you actually pasted something to write — just does it, instead of getting stuck."),
+        .init(icon: "sidebar.left", title: "Chats, kept tidy",
+              blurb: "Writing and Prompt keep separate threads, each in its own list, so your conversations never get tangled."),
+        .init(icon: "gearshape", title: "Settings within reach",
+              blurb: "Providers, your API key, models and presets are one click away — in the menu bar and at the bottom of the app's sidebar.")
     ]
 
     var body: some View {
