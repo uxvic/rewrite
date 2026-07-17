@@ -189,7 +189,10 @@ struct MainWindowView: View {
 
             actionChips
         }
-        .padding(16)
+        .frame(maxWidth: 760)            // centered column, not full window width
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private var actionChips: some View {
