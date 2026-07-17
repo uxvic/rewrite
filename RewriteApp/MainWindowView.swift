@@ -7,6 +7,7 @@ struct MainWindowView: View {
     @StateObject private var store: ConversationStore
     @StateObject private var engine: ChatEngine
     @State private var selection: UUID?
+    @State private var showSettings = false
 
     init() {
         let store = ConversationStore()
@@ -30,6 +31,17 @@ struct MainWindowView: View {
                   let c = store.conversations.first(where: { $0.id == id }) else { return }
             engine.open(c)
         }
+        .sheet(isPresented: $showSettings) {
+            ZStack(alignment: .topTrailing) {
+                SettingsView()
+                Button { showSettings = false } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 17)).foregroundStyle(Theme.textSecondary)
+                }
+                .buttonStyle(.plain).padding(12).keyboardShortcut(.cancelAction)
+            }
+            .frame(width: 480, height: 640)
+        }
     }
 
     // MARK: - Sidebar
@@ -52,7 +64,7 @@ struct MainWindowView: View {
             }
             .padding(4)
             .background(Theme.fillTranslucent.opacity(0.06), in: Capsule())
-            .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 10)
+            .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 18)
 
             HStack {
                 Text("Chats").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textSecondary)
@@ -62,7 +74,7 @@ struct MainWindowView: View {
                 }
                 .buttonStyle(.plain).foregroundStyle(Theme.accent).help("New chat")
             }
-            .padding(.horizontal, 14).padding(.bottom, 6)
+            .padding(.horizontal, 14).padding(.bottom, 8)
 
             List(selection: $selection) {
                 ForEach(store.conversations.filter { $0.mode == engine.mode }) { c in
@@ -76,6 +88,21 @@ struct MainWindowView: View {
                 }
             }
             .listStyle(.sidebar)
+
+            // Settings pinned at the bottom of the side nav.
+            Divider().opacity(0.35)
+            Button { showSettings = true } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "gearshape").font(.system(size: 13))
+                    Text("Settings").font(.system(size: 13, weight: .medium))
+                    Spacer()
+                }
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, 16).padding(.vertical, 11)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Settings")
         }
         .frame(minWidth: 210)
     }
