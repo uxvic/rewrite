@@ -235,6 +235,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     private func showPopover() {
         guard let button = statusItem.button else { return }
+        // The quick popover should appear over whatever app you're currently in.
+        // We must activate the app so the composer can take keystrokes — but for a
+        // .regular app (main window open) that activation pulls the big window
+        // forward on top of the app you were in, which reads as "the menu bar only
+        // opens the home page". If the popover is being invoked from another app
+        // (the main window isn't the key window), tuck the window away first so only
+        // the popover shows; it reopens on demand from the Dock or "Open in Window".
+        if let mw = mainWindow, mw.isVisible, !mw.isKeyWindow {
+            mw.orderOut(nil)
+        }
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
