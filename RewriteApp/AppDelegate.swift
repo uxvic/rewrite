@@ -158,10 +158,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     // MARK: - Standalone ChatGPT-style window
 
-    /// Opens (or focuses) the full app window. While it's open the app becomes a
-    /// regular Dock app (icon + Cmd-Tab); it returns to a menu-bar agent on close.
+    /// Opens (or focuses) the full app window. The app stays a menu-bar agent
+    /// (LSUIElement / .accessory) the whole time — promoting it to a .regular Dock
+    /// app made it own a Space, which yanked the menu-bar popover to the desktop
+    /// instead of floating it over your current app. The window still opens and
+    /// focuses fine as an accessory window.
     @objc func showMainWindow() {
-        NSApp.setActivationPolicy(.regular)
         if let w = mainWindow {
             NSApp.activate(ignoringOtherApps: true)
             w.makeKeyAndOrderFront(nil)
@@ -214,11 +216,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         return NSSize(width: min(frameSize.width, Self.maxWindowWidth), height: frameSize.height)
     }
 
-    /// When the main window closes, drop back to a menu-bar agent (no Dock icon).
-    func windowWillClose(_ notification: Notification) {
-        guard (notification.object as? NSWindow) === mainWindow else { return }
-        NSApp.setActivationPolicy(.accessory)
-    }
 
     @objc func togglePopover(_ sender: Any?) {
         // The menu-bar icon is a toggle: if a torn-off floating window is open,
