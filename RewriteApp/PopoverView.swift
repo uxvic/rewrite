@@ -41,6 +41,12 @@ struct PopoverView: View {
     @StateObject private var speech = SpeechManager()
 
     @State private var threadByMode: [RewriteMode: [ChatTurn]] = [:]
+    // Shared with the app window: the popover mirrors each mode's thread into one
+    // of these saved conversations (created lazily on the first real turn), so a
+    // chat started here shows up in the window and vice-versa. `currentConvoID`
+    // maps a mode to the conversation its thread is currently backed by.
+    @ObservedObject private var store = ConversationStore.shared
+    @State private var currentConvoID: [RewriteMode: UUID] = [:]
     // The draft is shared across modes (so a half-typed message survives a
     // Writing↔Prompt switch); only the conversations stay divided by mode.
     @State private var draft: String = ""
@@ -115,14 +121,14 @@ struct PopoverView: View {
     /// Compact one-row header: History (left) · mode pill (center) · Settings (right).
     private var specBar: some View {
         HStack(spacing: 8) {
-            IconButton(systemName: "clock.arrow.circlepath", active: panel == .history, help: "History") {
+            IconButton(systemName: "clock.arrow.circlepath", active: panel == .history, help: "Chats") {
                 panel = (panel == .history) ? .main : .history
             }
             Spacer(minLength: 6)
             if panel == .main {
                 modeSegmented($settings.mode, width: 200)
             } else {
-                Text(panel == .settings ? "Settings" : "History")
+                Text(panel == .settings ? "Settings" : "Chats")
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
                     .padding(.horizontal, 16).padding(.vertical, 7)
                     .glassFloat(Capsule())
@@ -564,19 +570,21 @@ struct PopoverView: View {
         return thread.isEmpty ? settings.mode.inputPlaceholder : "Add text or a reply…"
     }
 
-    // MARK: - History panel
+    // MARK: - Chats panel (shared with the app window)
 
+    /// The former "History" surface, now a browser of the shared saved
+    /// conversations — the same chats the window shows, permanent (no 20-item cap).
     private var historyPanel: some View {
-        let items = settings.history.filter { $0.mode == historyMode }
+        let chats = store.conversations.filter { $0.mode == historyMode }
         return Group {
-            if items.isEmpty {
-                Text("No \(historyMode.title.capitalized) rewrites yet.")
+            if chats.isEmpty {
+                Text("No \(historyMode.title.capitalized) chats yet.")
                     .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
-                        ForEach(items) { historyRow($0) }
+                        ForEach(chats) { chatRow($0) }
                     }
                     .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16)
                     .background(OverlayScrollers())
@@ -590,43 +598,62 @@ struct PopoverView: View {
             HStack {
                 modeSegmented($historyMode, width: 200)
                 Spacer(minLength: 6)
-                if !settings.history.isEmpty {
-                    Button { settings.history = [] } label: {
-                        Text("Clear")
-                            .font(.system(size: 12.5)).foregroundStyle(Theme.textPrimary)
-                            .padding(.horizontal, 14).padding(.vertical, 8)
-                            .glassFloat(Capsule())
-                    }
+                Button { startNewChatFromList() } label: { miniCapsule("square.and.pencil", "New") }
                     .buttonStyle(.plain)
-                }
             }
             .padding(.horizontal, 16).padding(.vertical, 8)
         }
         .onAppear { historyMode = settings.mode }
     }
 
-    private func historyRow(_ item: HistoryItem) -> some View {
-        Button { openHistory(item) } label: {
+    private func chatRow(_ c: Conversation) -> some View {
+        Button { openConversation(c) } label: {
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.actionLabel)
-                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.accent)
-                Text(item.output).font(.system(size: 12)).foregroundStyle(Theme.textPrimary)
-                    .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                Text(c.title.isEmpty ? "New chat" : c.title)
+                    .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                if let preview = chatPreview(c) {
+                    Text(preview).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                        .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassFloat(RoundedRectangle(cornerRadius: Metric.cardRadius, style: .continuous))
         }
         .buttonStyle(.plain)
+        .contextMenu { Button("Delete", role: .destructive) { deleteConversation(c) } }
     }
 
-    private func openHistory(_ item: HistoryItem) {
-        settings.mode = item.mode   // open in the matching tab; computed thread targets it
-        newChat()
-        thread.append(ChatTurn(role: .user, text: item.input))
-        thread.append(ChatTurn(role: .assistant, text: item.output,
-                               actionLabel: item.actionLabel, sourceText: item.input))
+    private func chatPreview(_ c: Conversation) -> String? {
+        let text = c.turns.last(where: { $0.role == .assistant && !$0.text.isEmpty })?.text
+            ?? c.turns.last(where: { $0.role == .user && !$0.text.isEmpty })?.text
+        return text?.replacingOccurrences(of: "\n", with: " ")
+    }
+
+    /// Open a saved chat into the popover's thread (switching to its mode).
+    private func openConversation(_ c: Conversation) {
+        currentTask?.cancel(); isLoading = false
+        settings.mode = c.mode
+        currentConvoID[c.mode] = c.id
+        threadByMode[c.mode] = c.turns
+        selectedAction = nil; composerMode = .text; showSelectPrompt = false
         panel = .main
+        injectWhatsNewIfNeeded()
+    }
+
+    private func startNewChatFromList() {
+        newChat()
+        panel = .main
+        injectWhatsNewIfNeeded()
+    }
+
+    private func deleteConversation(_ c: Conversation) {
+        store.delete(c.id)
+        if currentConvoID[c.mode] == c.id {
+            currentConvoID[c.mode] = nil
+            threadByMode[c.mode] = []
+        }
     }
 
     // MARK: - Derived
@@ -638,6 +665,24 @@ struct PopoverView: View {
         return ""
     }
     private var draftIsEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    // MARK: - Shared conversation sync
+
+    /// Persist the current mode's real turns into its shared conversation (creating
+    /// one lazily on the first turn) so the window sees it. Ephemeral cards
+    /// (What's New / setup) are never saved.
+    private func syncCurrent() {
+        let mode = settings.mode
+        let turns = (threadByMode[mode] ?? []).filter { $0.role == .user || $0.role == .assistant }
+        guard !turns.isEmpty else { return }
+        let id = currentConvoID[mode] ?? {
+            let fresh = UUID(); currentConvoID[mode] = fresh; return fresh
+        }()
+        var convo = store.conversations.first(where: { $0.id == id }) ?? Conversation(id: id, mode: mode, turns: [])
+        convo.turns = turns
+        convo.mode = mode
+        store.save(convo)
+    }
 
     // MARK: - Actions
 
@@ -679,6 +724,7 @@ struct PopoverView: View {
     private func addUserTurn(_ t: String) {
         thread.append(ChatTurn(role: .user, text: t, fromClipboard: fromClipboard))
         draft = ""; fromClipboard = false; showSelectPrompt = false
+        syncCurrent()
     }
 
     /// Runs an action against the source text. When `smart` is set this is a Smart
@@ -781,6 +827,7 @@ struct PopoverView: View {
                 }
                 isLoading = false
                 settings.addHistory(actionLabel: finalLabel, input: src, output: result, mode: runMode)
+                syncCurrent()
                 if settings.autoCopyResult { setClipboard(result) }
             }
         } catch {
@@ -789,6 +836,7 @@ struct PopoverView: View {
                 if Task.isCancelled {
                     thread.removeAll { $0.id == id && $0.text.isEmpty }
                     mutateTurn(id) { $0.isStreaming = false }
+                    syncCurrent()
                 } else if isSetupError(error) {
                     // Provider isn't set up — show an inline setup card instead
                     // of a raw error, and remember what to retry afterwards.
@@ -803,6 +851,7 @@ struct PopoverView: View {
                         $0.isStreaming = false
                         $0.isError = true
                     }
+                    syncCurrent()
                 }
             }
         }
@@ -838,6 +887,7 @@ struct PopoverView: View {
         currentTask?.cancel()
         isLoading = false
         thread = []
+        currentConvoID[settings.mode] = nil   // next real turn starts a fresh shared chat
         draft = ""
         composerMode = .text
         selectedAction = nil

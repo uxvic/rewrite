@@ -10,7 +10,7 @@ struct MainWindowView: View {
     @State private var showSettings = false
 
     init() {
-        let store = ConversationStore()
+        let store = ConversationStore.shared
         let initial = store.conversations.first ?? store.create()
         let engine = ChatEngine(initial)
         engine.onPersist = { store.save($0) }

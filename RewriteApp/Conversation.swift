@@ -34,6 +34,11 @@ struct Conversation: Identifiable, Codable, Equatable {
 /// Loads/saves conversations and exposes them to the sidebar (most-recent first).
 /// Backed by a single JSON file in Application Support/Rewrite.
 final class ConversationStore: ObservableObject {
+    /// One store behind BOTH the menu-bar popover and the app window, so a chat
+    /// started in either surface shows up in the other (live while both are open,
+    /// since they observe the same @Published list).
+    static let shared = ConversationStore()
+
     @Published private(set) var conversations: [Conversation] = []
 
     private let fileURL: URL
