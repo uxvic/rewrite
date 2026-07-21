@@ -115,8 +115,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         if isRightClick {
             showStatusMenu()
         } else {
-            togglePopover(nil)
+            menuBarPrimaryAction()
         }
+    }
+
+    /// Left-clicking the menu-bar icon. If the full window is already open, the
+    /// icon brings it to the front instead of a popover — the two surfaces don't
+    /// compete, and it no longer looks like clicking the icon "closes" the window.
+    /// The popover is the icon's job only when the window is closed. (The popover
+    /// hotkey still summons the popover regardless of window state.)
+    private func menuBarPrimaryAction() {
+        if detachedPanel != nil { redock(); return }
+        if popover.isShown { closePopover(); return }
+        if let w = mainWindow, w.isVisible {
+            showMainWindow()            // focus the existing window
+            return
+        }
+        showPopover()
     }
 
     private func showStatusMenu() {
