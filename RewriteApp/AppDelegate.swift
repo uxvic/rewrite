@@ -115,23 +115,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         if isRightClick {
             showStatusMenu()
         } else {
-            menuBarPrimaryAction()
+            togglePopover(nil)
         }
-    }
-
-    /// Left-clicking the menu-bar icon. If the full window is already open, the
-    /// icon brings it to the front instead of a popover — the two surfaces don't
-    /// compete, and it no longer looks like clicking the icon "closes" the window.
-    /// The popover is the icon's job only when the window is closed. (The popover
-    /// hotkey still summons the popover regardless of window state.)
-    private func menuBarPrimaryAction() {
-        if detachedPanel != nil { redock(); return }
-        if popover.isShown { closePopover(); return }
-        if let w = mainWindow, w.isVisible {
-            showMainWindow()            // focus the existing window
-            return
-        }
-        showPopover()
     }
 
     private func showStatusMenu() {
@@ -247,16 +232,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     private func showPopover() {
         guard let button = statusItem.button else { return }
-        // The quick popover should appear over whatever app you're currently in.
-        // We must activate the app so the composer can take keystrokes — but for a
-        // .regular app (main window open) that activation pulls the big window
-        // forward on top of the app you were in, which reads as "the menu bar only
-        // opens the home page". If the popover is being invoked from another app
-        // (the main window isn't the key window), tuck the window away first so only
-        // the popover shows; it reopens on demand from the Dock or "Open in Window".
-        if let mw = mainWindow, mw.isVisible, !mw.isKeyWindow {
-            mw.orderOut(nil)
-        }
+        // The quick popover is always available for capture-anywhere — even with the
+        // full window open. We activate so the composer can take keystrokes; because
+        // the app is a menu-bar agent (.accessory, never .regular), activating no
+        // longer switches Spaces or drags the window over the app you're in, so the
+        // popover just floats over your current app and the window stays put.
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
