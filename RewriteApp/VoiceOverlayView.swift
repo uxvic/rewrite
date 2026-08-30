@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// Dictation as a floating, GLOWING glass card at the bottom of the transparent
-/// surface: the reactive strands above, then the card with the live transcript,
-/// an amplitude-driven waveform, and Esc / Use ⏎ controls. The violet bloom +
-/// colored shadow make the recording state unmistakable.
+/// Dictation as a single floating glass card hanging right under the menu-bar
+/// icon: live transcript (glowing softly as words land), an amplitude-driven
+/// waveform, and trash+Esc / Use ⏎ controls. No strands, no top animation —
+/// just the card, like the reference.
 struct VoiceOverlayView: View {
     @ObservedObject var speech: SpeechManager
     var onDone: () -> Void
@@ -11,38 +11,19 @@ struct VoiceOverlayView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var breathe = false
+    @State private var transcriptHeight: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer()
-            strands
             recordingCard
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
-        .frame(width: 380, height: 668)
+        .padding(.horizontal, 22)
+        .padding(.top, 10)
+        .frame(width: 424, height: 700, alignment: .top)
         .onAppear {
             guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 1.7).repeatForever(autoreverses: true)) { breathe = true }
         }
-    }
-
-    // MARK: Strands
-
-    /// Flowing, glowing strands that swell while the user talks — floating
-    /// straight over the desktop now (the window has no background at all).
-    private var strands: some View {
-        StrandsView(
-            colors: ["#A7A4F5", "#8E8BF0", "#C5C2FA"],
-            count: 3, speed: 0.5, amplitude: 1, waviness: 1,
-            thickness: 0.7, glow: 2.0, taper: 3, spread: 1,
-            hueShift: 0, intensity: 0.5, saturation: 1.2, opacity: 1, scale: 1.5,
-            level: speech.level
-        )
-        .frame(maxWidth: .infinity)
-        .frame(height: 200)
-        .padding(.horizontal, -16)
-        .allowsHitTesting(false)
     }
 
     // MARK: Recording card
@@ -82,21 +63,24 @@ struct VoiceOverlayView: View {
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .liquidGlass(RoundedRectangle(cornerRadius: 30, style: .continuous), shadow: 0.35)
-        // The colored bloom radiating out from behind the glass — the "recording"
-        // light. It breathes slowly (static under Reduce Motion).
+        // A restrained violet bloom behind the glass — the "recording" light. It
+        // breathes slowly (static under Reduce Motion) and stays tight to the
+        // card so it never reads as a stray artifact.
         .background {
-            RadialGradient(colors: [Theme.accent.opacity(0.55), Theme.accent.opacity(0)],
-                           center: .center, startRadius: 8, endRadius: 230)
-                .blur(radius: 28)
-                .scaleEffect(breathe ? 1.08 : 0.97)
-                .padding(-46)
+            RadialGradient(colors: [Theme.accent.opacity(0.38), Theme.accent.opacity(0)],
+                           center: .center, startRadius: 8, endRadius: 190)
+                .blur(radius: 24)
+                .scaleEffect(breathe ? 1.05 : 0.97)
+                .padding(-20)          // stays inside the window's 22pt gutter — no clipping
                 .allowsHitTesting(false)
         }
-        .shadow(color: Theme.accent.opacity(0.45), radius: 30, y: 4)
+        .shadow(color: Theme.accent.opacity(0.35), radius: 18, y: 4)
     }
 
     // MARK: Transcript
 
+    /// Exactly as tall as the words (one line while listening), up to a cap —
+    /// then it scrolls, pinned to the newest words.
     private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
@@ -105,12 +89,15 @@ struct VoiceOverlayView: View {
                     .multilineTextAlignment(.leading)
                     .lineSpacing(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    // The words themselves glow as they land.
-                    .shadow(color: Theme.accent.opacity(0.7), radius: 12)
-                    .shadow(color: Theme.accent.opacity(0.3), radius: 28)
+                    // The words glow softly as they land.
+                    .shadow(color: Theme.accent.opacity(0.6), radius: 10)
+                    .background(GeometryReader { g in
+                        Color.clear.preference(key: ThreadHeightKey.self, value: g.size.height)
+                    })
                 Color.clear.frame(height: 1).id("bottom")
             }
-            .frame(maxHeight: 130)
+            .onPreferenceChange(ThreadHeightKey.self) { transcriptHeight = $0 }
+            .frame(height: min(max(transcriptHeight, 26), 116))
             .onChange(of: speech.transcript) { _, _ in
                 withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
             }

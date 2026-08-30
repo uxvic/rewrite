@@ -226,10 +226,13 @@ extension View {
     }
 
     /// The pre-Tahoe stand-in for liquid glass. Kept separate so the availability
-    /// branches above stay trivially readable.
+    /// branches above stay trivially readable. The smoke layer on top of the
+    /// material guarantees light text stays readable even over a white page —
+    /// the glass reads grey on light backdrops and near-black on dark ones.
     private func approximateGlass<S: Shape>(_ shape: S, shadow: Double) -> some View {
         background(
             shape.fill(.ultraThinMaterial)
+                .overlay(shape.fill(Color.black.opacity(0.20)))
                 .shadow(color: Color.black.opacity(shadow), radius: 14, y: 6)
         )
         .overlay(

@@ -97,7 +97,7 @@ struct PopoverView: View {
                 .onExitCommand { NotificationCenter.default.post(name: .rewriteCloseWindow, object: nil) }
             }
         }
-        .frame(width: 380, height: 668)
+        .frame(width: 424, height: 700)
         .onAppear { autoFillFromClipboard(); injectWhatsNewIfNeeded() }
         .onChange(of: settings.mode) { _, _ in selectedAction = nil; composerMode = .text; showSelectPrompt = false; injectWhatsNewIfNeeded() }
         // Host is dismissing a torn-off window while dictation is live — end it
@@ -125,9 +125,13 @@ struct PopoverView: View {
             composer
             modeSegmented($settings.mode, width: 200)
         }
-        .padding(.horizontal, 14)
+        // Hang from the TOP so the stack appears right under the menu-bar icon
+        // (bottom-anchoring left a huge invisible gap between click and UI).
+        // The 22pt gutters give element shadows room inside the invisible window
+        // instead of clipping at its edges.
+        .padding(.horizontal, 22)
         .padding(.top, 10)
-        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     /// Settings / Chats are dense surfaces that need a readable ground, so they
@@ -198,34 +202,43 @@ struct PopoverView: View {
         markWhatsNewSeen()
     }
 
-    /// The thread floats bottom-anchored in an invisible viewport. Short chats
-    /// are a compact stack just above the composer; long ones scroll, and — with
-    /// no window edge to clip against — old bubbles FADE OUT at the top.
+    /// Height cap for the thread; beyond it the thread scrolls and fades at the top.
+    private static let threadCap: CGFloat = 430
+    @State private var threadHeight: CGFloat = 0
+
+    /// The thread hangs from the top (right under the menu-bar icon) and grows
+    /// downward: exactly as tall as its content until the cap, then it scrolls —
+    /// and with no window edge to clip against, old bubbles FADE OUT at the top.
     private var threadView: some View {
-        GeometryReader { geo in
-            ScrollViewReader { proxy in
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if thread.isEmpty {
-                            emptyState
-                        } else {
-                            ForEach(thread) { turn in turnView(turn) }
-                        }
-                        Color.clear.frame(height: 1).id("bottom")
+        ScrollViewReader { proxy in
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 12) {
+                    if thread.isEmpty {
+                        emptyState
+                    } else {
+                        ForEach(thread) { turn in turnView(turn) }
                     }
-                    .padding(.horizontal, 2)
-                    .padding(.top, 24)
-                    .frame(minHeight: geo.size.height, alignment: .bottom)
+                    Color.clear.frame(height: 1).id("bottom")
                 }
-                .onChange(of: thread) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
-                .mask(
+                .padding(.horizontal, 2)
+                .background(GeometryReader { g in
+                    Color.clear.preference(key: ThreadHeightKey.self, value: g.size.height)
+                })
+            }
+            .onPreferenceChange(ThreadHeightKey.self) { threadHeight = $0 }
+            .frame(height: min(threadHeight, Self.threadCap))
+            .mask {
+                if threadHeight > Self.threadCap {
                     LinearGradient(stops: [
                         .init(color: .clear, location: 0),
-                        .init(color: .black, location: 0.09),
+                        .init(color: .black, location: 0.12),
                         .init(color: .black, location: 1),
                     ], startPoint: .top, endPoint: .bottom)
-                )
+                } else {
+                    Rectangle()
+                }
             }
+            .onChange(of: thread) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
         }
     }
 
@@ -958,6 +971,13 @@ struct PopoverView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
     }
+}
+
+/// Reports the thread's natural content height so the invisible viewport can be
+/// exactly as tall as the conversation (up to the cap).
+struct ThreadHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 /// Native multi-line composer input: a real NSScrollView + NSTextView so the

@@ -208,9 +208,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let panel = glassPanel, panel.isVisible { hideGlassPanel() } else { showGlassPanel() }
     }
 
-    /// The size of the invisible panel. Content inside is bottom-anchored glass
-    /// elements; the unused upper area renders nothing.
-    private static let panelSize = NSSize(width: 380, height: 668)
+    /// The size of the invisible panel. Wider/taller than the content column so
+    /// element shadows and glows render inside the window instead of clipping at
+    /// its edges; content hangs from the top (right under the icon).
+    private static let panelSize = NSSize(width: 424, height: 700)
 
     /// Shows the background-less quick surface: a transparent, borderless panel
     /// anchored under the menu-bar icon. Only the SwiftUI glass elements draw.
@@ -233,6 +234,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             panel.isOpaque = false
             panel.backgroundColor = .clear
             panel.isReleasedWhenClosed = false
+            // The floating glass keeps ONE identity — smoked dark glass with light
+            // text, like the reference. Materials/glass follow the WINDOW's
+            // appearance (not the pixels behind them), so forcing dark makes the
+            // elements read grey over a white page and near-black over a dark one —
+            // never washed out light-on-light.
+            panel.appearance = NSAppearance(named: .darkAqua)
             panel.contentViewController = contentVC
             glassPanel = panel
         }
