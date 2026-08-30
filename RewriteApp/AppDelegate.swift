@@ -244,9 +244,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             glassPanel = panel
         }
 
-        panel.setFrame(anchoredPanelFrame(), display: true)
+        // Re-anchor under the icon only when (re)opening, not when it's already up.
+        if !panel.isVisible { panel.setFrame(anchoredPanelFrame(), display: true) }
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
+        // Re-run clipboard auto-fill + What's New on every show (orderOut doesn't
+        // re-fire SwiftUI's .onAppear).
+        DispatchQueue.main.async { NotificationCenter.default.post(name: .rewritePanelWillShow, object: nil) }
 
         // A global monitor fires for clicks that land in another app or the desktop
         // (never inside our own panel), so this closes on "click outside" — except
@@ -303,7 +307,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// it to the Settings panel.
     @objc private func openSettings() {
         showGlassPanel()
-        NotificationCenter.default.post(name: .rewriteShowSettings, object: nil)
+        // async so the content's .onReceive is subscribed before the post (on a
+        // first open the panel's SwiftUI tree may not be committed yet).
+        DispatchQueue.main.async { NotificationCenter.default.post(name: .rewriteShowSettings, object: nil) }
     }
 
     // MARK: - Rewrite selection in place (anywhere)
@@ -360,6 +366,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 extension Notification.Name {
     static let rewriteVoiceActivated   = Notification.Name("RewriteVoiceActivated")
     static let rewriteVoiceEnded       = Notification.Name("RewriteVoiceEnded")
+    static let rewritePanelWillShow    = Notification.Name("RewritePanelWillShow")
     static let rewriteCloseWindow       = Notification.Name("RewriteCloseWindow")
     static let rewriteShowSettings      = Notification.Name("RewriteShowSettings")
     static let rewriteForceExitVoice    = Notification.Name("RewriteForceExitVoice")

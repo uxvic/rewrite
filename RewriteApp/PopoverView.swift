@@ -99,6 +99,13 @@ struct PopoverView: View {
         }
         .frame(width: 424, height: 700)
         .onAppear { autoFillFromClipboard(); injectWhatsNewIfNeeded() }
+        // The panel is hidden with orderOut (the hosting view stays attached), so
+        // SwiftUI never re-fires .onAppear on reopen. The host posts this on every
+        // show so clipboard auto-fill + What's New re-run each time, as they did
+        // when the NSPopover detached/reattached its content.
+        .onReceive(NotificationCenter.default.publisher(for: .rewritePanelWillShow)) { _ in
+            autoFillFromClipboard(); injectWhatsNewIfNeeded()
+        }
         .onChange(of: settings.mode) { _, _ in selectedAction = nil; composerMode = .text; showSelectPrompt = false; injectWhatsNewIfNeeded() }
         // Host is dismissing a torn-off window while dictation is live — end it
         // cleanly so the mic is released.
@@ -121,17 +128,30 @@ struct PopoverView: View {
     /// right-click menu), ✕ is replaced by Esc / click-outside / icon toggle.
     private var mainSurface: some View {
         VStack(spacing: 12) {
+            modeSegmented($settings.mode, width: 220)   // Writing/Prompt — at the TOP of the chat
             threadView
             composer
-            modeSegmented($settings.mode, width: 200)
         }
-        // Hang from the TOP so the stack appears right under the menu-bar icon
-        // (bottom-anchoring left a huge invisible gap between click and UI).
-        // The 22pt gutters give element shadows room inside the invisible window
-        // instead of clipping at its edges.
+        // Hang from the TOP so the whole stack sits right under the menu-bar icon
+        // (no basin above it). The 22pt gutters give element shadows + the blob
+        // room inside the invisible window instead of clipping at its edges.
         .padding(.horizontal, 22)
         .padding(.top, 10)
+        .background(contrastBlob)   // separates the glass from any desktop, light or dark
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// A soft blob behind the whole stack so the glass never blends into the
+    /// desktop: a dark halo reads it apart on a LIGHT background, a faint light
+    /// halo on a DARK one. (Sampling the actual wallpaper would need screen-
+    /// recording permission; this dual halo needs none and works either way.)
+    private var contrastBlob: some View {
+        RoundedRectangle(cornerRadius: 40, style: .continuous)
+            .fill(Color.black.opacity(0.16))
+            .padding(-16)
+            .shadow(color: Color.black.opacity(0.55), radius: 34, y: 10)   // pops on light
+            .shadow(color: Color.white.opacity(0.12), radius: 16)          // pops on dark
+            .allowsHitTesting(false)
     }
 
     /// Settings / Chats are dense surfaces that need a readable ground, so they
@@ -245,18 +265,19 @@ struct PopoverView: View {
         }
     }
 
+    /// The opening guidance arrives as an assistant chat bubble (not a big centered
+    /// card), so an empty chat already looks like a conversation.
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "text.bubble").font(.system(size: 26)).foregroundStyle(Theme.textSecondary)
+        HStack {
             Text(settings.mode == .writing
                  ? "Paste, type, or dictate the text you want to rework — then pick how to rewrite it."
                  : "Paste a rough prompt — then pick how to improve it.")
-                .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                .multilineTextAlignment(.center)
+                .font(.system(size: 13.5)).foregroundStyle(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 14).padding(.vertical, 11)
+                .liquidGlass(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous))
+            Spacer(minLength: 36)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20).padding(.horizontal, 18)
-        .liquidGlass(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous))
     }
 
     @ViewBuilder
@@ -1094,6 +1115,14 @@ final class ComposerNSTextView: NSTextView {
         if ok { DispatchQueue.main.async { [weak self] in self?.onFocusChange(false) } }
         return ok
     }
+
+    /// Esc dismisses the floating glass surface. The composer holds first
+    /// responder on every show, and NSTextView otherwise swallows Esc into
+    /// word-completion — so `.onExitCommand` never fires. Intercept it here.
+    /// (In the main window the panel isn't showing, so this is a harmless no-op.)
+    override func cancelOperation(_ sender: Any?) {
+        NotificationCenter.default.post(name: .rewriteCloseWindow, object: nil)
+    }
 }
 
 /// Scroll view that sizes itself to its text, from one line up to `maxLines`
@@ -1140,8 +1169,10 @@ struct SubmitKeyMonitor: NSViewRepresentable {
     var onSubmit: () -> Void
 
     func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        context.coordinator.hostView = view
         context.coordinator.install()
-        return NSView()
+        return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
@@ -1156,6 +1187,7 @@ struct SubmitKeyMonitor: NSViewRepresentable {
 
     final class Coordinator {
         var onSubmit: () -> Void
+        weak var hostView: NSView?
         private var monitor: Any?
 
         init(onSubmit: @escaping () -> Void) { self.onSubmit = onSubmit }
@@ -1164,11 +1196,13 @@ struct SubmitKeyMonitor: NSViewRepresentable {
             guard monitor == nil else { return }
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self else { return event }
-                // Return (36) / keypad Enter (76) / Space (49) while the composer is
-                // focused. Inside the docked NSPopover these otherwise leak past the
-                // field and dismiss the popover, so we act on them here (this local
-                // monitor runs before window dispatch) and CONSUME them.
+                // Return (36) / keypad Enter (76) / Space (49) while THIS surface's
+                // composer is focused. The monitor is app-wide, and the popover and
+                // the main window now both have a composer, so we must scope to our
+                // OWN window (event.window === hostView.window) or Return could fire
+                // the other surface's send. We act before window dispatch and CONSUME.
                 guard event.keyCode == 36 || event.keyCode == 76 || event.keyCode == 49,
+                      let host = self.hostView, event.window === host.window,
                       let tv = event.window?.firstResponder as? ComposerNSTextView
                 else { return event }
                 // Mid-IME composition: let the input method handle the key (e.g. Return
