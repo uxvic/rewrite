@@ -148,7 +148,8 @@ struct PopoverView: View {
     private var contrastBlob: some View {
         RoundedRectangle(cornerRadius: 40, style: .continuous)
             .fill(Color.black.opacity(0.30))
-            .padding(-16)
+            .blur(radius: 22)          // a soft cloud, not a crisp box — no "cropped" frame
+            .padding(-10)
             .shadow(color: Color.black.opacity(0.6), radius: 34, y: 10)    // pops on light
             .shadow(color: Color.white.opacity(0.12), radius: 16)          // pops on dark
             .allowsHitTesting(false)
@@ -252,13 +253,18 @@ struct PopoverView: View {
             .frame(height: min(threadHeight, Self.threadCap))
             .mask {
                 if threadHeight > Self.threadCap {
+                    // Fade only the TOP while scrolling; extend the opaque region
+                    // past the sides/bottom so bubble shadows aren't clipped there.
                     LinearGradient(stops: [
                         .init(color: .clear, location: 0),
                         .init(color: .black, location: 0.12),
                         .init(color: .black, location: 1),
                     ], startPoint: .top, endPoint: .bottom)
+                    .padding(.horizontal, -80).padding(.bottom, -80)
                 } else {
-                    Rectangle()
+                    // Short chats: an opaque mask extended well past the bounds so
+                    // NOTHING clips — no boxy "cropped" edge around the bubbles.
+                    Rectangle().padding(-80)
                 }
             }
             .onChange(of: thread) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
