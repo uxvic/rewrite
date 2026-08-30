@@ -224,12 +224,12 @@ extension View {
         #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             self
-                // The same smoke as the fallback, layered between content and the
-                // real glass: genuine Liquid Glass refracts the actual pixels
-                // behind the window, so over a white page it would otherwise read
-                // much lighter than the smoked identity and thin the light text.
-                .background(shape.fill(Color.black.opacity(0.26)))
+                // Deep near-black smoke under the real glass — genuine Liquid Glass
+                // refracts the pixels behind the window, so this keeps it glassy
+                // BLACK (piano-black) rather than washing to the desktop's colour.
+                .background(shape.fill(Color.black.opacity(0.5)))
                 .glassEffect(.regular, in: shape)
+                .overlay(glossSheen(shape))
                 .shadow(color: Color.black.opacity(shadow), radius: 14, y: 6)
         } else {
             approximateGlass(shape, shadow: shadow)
@@ -239,21 +239,37 @@ extension View {
         #endif
     }
 
-    /// The pre-Tahoe stand-in for liquid glass. Kept separate so the availability
-    /// branches above stay trivially readable. The smoke layer on top of the
-    /// material guarantees light text stays readable even over a white page —
-    /// the glass reads grey on light backdrops and near-black on dark ones.
+    /// The pre-Tahoe stand-in for liquid glass. A deep near-black smoke over the
+    /// material gives the glossy-black body; the sheen + rim make it read as
+    /// reflective glass (piano black) rather than flat dark paint.
     private func approximateGlass<S: Shape>(_ shape: S, shadow: Double) -> some View {
         background(
             shape.fill(.ultraThinMaterial)
-                .overlay(shape.fill(Color.black.opacity(0.34)))
+                .overlay(shape.fill(Color.black.opacity(0.6)))
                 .shadow(color: Color.black.opacity(shadow), radius: 14, y: 6)
         )
+        .overlay(glossSheen(shape))
         .overlay(
             shape.stroke(
-                LinearGradient(colors: [Color.white.opacity(0.35), Color.white.opacity(0.08)],
+                LinearGradient(colors: [Color.white.opacity(0.4), Color.white.opacity(0.06)],
                                startPoint: .top, endPoint: .bottom),
                 lineWidth: 1)
         )
+    }
+
+    /// A glossy top-light on the dark glass — a bright reflection fading from the
+    /// top edge, blended additively so it reads as a sheen on black glass (the
+    /// piano-black / plastic look) rather than a grey overlay.
+    private func glossSheen<S: Shape>(_ shape: S) -> some View {
+        shape
+            .fill(LinearGradient(
+                stops: [
+                    .init(color: Color.white.opacity(0.18), location: 0),
+                    .init(color: Color.white.opacity(0.04), location: 0.30),
+                    .init(color: .clear, location: 0.62),
+                ],
+                startPoint: .top, endPoint: .bottom))
+            .blendMode(.screen)
+            .allowsHitTesting(false)
     }
 }
