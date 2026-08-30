@@ -224,10 +224,10 @@ extension View {
         #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             self
-                // Deep near-black smoke under the real glass — genuine Liquid Glass
-                // refracts the pixels behind the window, so this keeps it glassy
-                // BLACK (piano-black) rather than washing to the desktop's colour.
-                .background(shape.fill(Color.black.opacity(0.5)))
+                // Near-solid black under the real glass — genuine Liquid Glass
+                // refracts the pixels behind the window, so without this the panel
+                // takes the desktop's colour. This keeps it piano-black.
+                .background(shape.fill(Color.black.opacity(0.82)))
                 .glassEffect(.regular, in: shape)
                 .overlay(glossSheen(shape))
                 .shadow(color: Color.black.opacity(shadow), radius: 14, y: 6)
@@ -239,13 +239,17 @@ extension View {
         #endif
     }
 
-    /// The pre-Tahoe stand-in for liquid glass. A deep near-black smoke over the
-    /// material gives the glossy-black body; the sheen + rim make it read as
-    /// reflective glass (piano black) rather than flat dark paint.
+    /// The pre-Tahoe stand-in for liquid glass: a near-SOLID black body.
+    ///
+    /// Materials are deliberately not used for the fill. In a fully transparent
+    /// window `.ultraThinMaterial` has nothing behind it to sample, so it renders
+    /// as a flat light-grey haze that fights any black laid over it — which is
+    /// exactly what kept this surface looking charcoal instead of black. A direct
+    /// near-opaque black fill gives the piano-black body; the gloss sheen, rim
+    /// light and drop shadow supply the "glass".
     private func approximateGlass<S: Shape>(_ shape: S, shadow: Double) -> some View {
         background(
-            shape.fill(.ultraThinMaterial)
-                .overlay(shape.fill(Color.black.opacity(0.6)))
+            shape.fill(Color.black.opacity(0.9))
                 .shadow(color: Color.black.opacity(shadow), radius: 14, y: 6)
         )
         .overlay(glossSheen(shape))
