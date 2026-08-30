@@ -18,7 +18,7 @@ struct VoiceOverlayView: View {
             recordingCard
         }
         .padding(.horizontal, 22)
-        .padding(.top, 10)
+        .padding(.top, 22)   // matches the side gutters so the bloom + shadow never clip at the top edge
         .frame(width: 424, height: 700, alignment: .top)
         .onAppear {
             guard !reduceMotion else { return }
@@ -70,8 +70,8 @@ struct VoiceOverlayView: View {
             RadialGradient(colors: [Theme.accent.opacity(0.38), Theme.accent.opacity(0)],
                            center: .center, startRadius: 8, endRadius: 190)
                 .blur(radius: 24)
-                .scaleEffect(breathe ? 1.05 : 0.97)
-                .padding(-20)          // stays inside the window's 22pt gutter — no clipping
+                .scaleEffect(breathe ? 1.0 : 0.94)   // never grows past its frame → never past the window
+                .padding(-20)          // stays inside the window's 22pt gutters — no clipping
                 .allowsHitTesting(false)
         }
         .shadow(color: Theme.accent.opacity(0.35), radius: 18, y: 4)

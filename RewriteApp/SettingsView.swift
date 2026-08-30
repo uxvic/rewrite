@@ -33,7 +33,9 @@ struct SettingsView: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .ambientBackground()
+        // No background of its own: in the glass panel the card behind provides
+        // the surface; the main window's sheet adds .ambientBackground() at the
+        // call site instead.
     }
 
     // MARK: helpers
@@ -106,7 +108,7 @@ struct SettingsView: View {
                         Image(systemName: "trash").foregroundStyle(Theme.ledFail)
                     }.buttonStyle(.borderless)
                 }
-                .padding(10).module(Theme.panel)
+                .padding(10).glassModule()
             }
             TextField("Button label (e.g. Excited)", text: $newPresetLabel).textFieldStyle(CapsuleFieldStyle())
             TextField("Instruction (e.g. rewrite with high energy)", text: $newPresetInstruction).textFieldStyle(CapsuleFieldStyle())
@@ -483,6 +485,6 @@ private struct CommandRow: View {
             .buttonStyle(.borderless).help("Copy command")
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
-        .module(Theme.surface)
+        .glassModule()
     }
 }

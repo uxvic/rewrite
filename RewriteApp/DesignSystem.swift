@@ -197,6 +197,15 @@ extension View {
     /// Near-black ambient radial background.
     func ambientBackground() -> some View { background(AmbientBackground()) }
 
+    /// Translucent stand-in for `.module` on glass surfaces — a quiet tinted
+    /// card that lets the glass behind it show through instead of an opaque slab.
+    func glassModule(focused: Bool = false) -> some View {
+        background(RoundedRectangle(cornerRadius: Metric.cardRadius, style: .continuous)
+            .fill(Theme.fillTranslucent.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: Metric.cardRadius, style: .continuous)
+            .stroke(focused ? Theme.accent.opacity(0.6) : Theme.fillTranslucent.opacity(0.08), lineWidth: 1))
+    }
+
     /// Big Sur–style frosted glass for a floating control: an opaque-ish material
     /// fill in `shape`, a hairline edge, and a soft drop shadow so it reads as
     /// floating above the chat scrolling behind it.
@@ -215,6 +224,11 @@ extension View {
         #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             self
+                // The same smoke as the fallback, layered between content and the
+                // real glass: genuine Liquid Glass refracts the actual pixels
+                // behind the window, so over a white page it would otherwise read
+                // much lighter than the smoked identity and thin the light text.
+                .background(shape.fill(Color.black.opacity(0.14)))
                 .glassEffect(.regular, in: shape)
                 .shadow(color: Color.black.opacity(shadow), radius: 14, y: 6)
         } else {

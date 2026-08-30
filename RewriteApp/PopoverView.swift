@@ -152,7 +152,10 @@ struct PopoverView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         .liquidGlass(RoundedRectangle(cornerRadius: 30, style: .continuous))
-        .padding(10)
+        // Room for the card's shadow inside the invisible window (radius 14, y 6).
+        .padding(.horizontal, 22)
+        .padding(.top, 10)
+        .padding(.bottom, 22)
     }
 
     /// Soft segmented WRITING / PROMPT pill, bound to any mode selection so it can
@@ -570,8 +573,8 @@ struct PopoverView: View {
             }.buttonStyle(.plain)
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.regularMaterial)
-            .shadow(color: Color.black.opacity(0.18), radius: 5, y: 1))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(Theme.fillTranslucent.opacity(0.06)))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.accent.opacity(0.4), lineWidth: 1))
     }
 
@@ -997,7 +1000,7 @@ struct ComposerTextView: NSViewRepresentable {
         tv.delegate = context.coordinator
         tv.string = text
         tv.font = .systemFont(ofSize: 13.5)
-        tv.textColor = NSColor(Theme.textPrimary)
+        tv.textColor = Theme.nsTextPrimary   // dynamic NSColor — tracks the window's appearance
         tv.insertionPointColor = NSColor(Theme.accent)
         tv.drawsBackground = false
         tv.isRichText = false
@@ -1239,7 +1242,7 @@ struct SetupCardView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .module(Theme.surface)
+        .liquidGlass(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous))
         .padding(.trailing, 8)
     }
 
@@ -1336,7 +1339,7 @@ struct WhatsNewCardView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .module(Theme.surface)
+        .liquidGlass(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous))
         .padding(.trailing, 8)
     }
 }

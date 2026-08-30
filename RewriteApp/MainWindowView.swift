@@ -33,7 +33,7 @@ struct MainWindowView: View {
         }
         .sheet(isPresented: $showSettings) {
             ZStack(alignment: .topTrailing) {
-                SettingsView()
+                SettingsView().ambientBackground()
                 Button { showSettings = false } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 17)).foregroundStyle(Theme.textSecondary)
