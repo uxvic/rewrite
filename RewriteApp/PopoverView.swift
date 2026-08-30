@@ -147,9 +147,9 @@ struct PopoverView: View {
     /// recording permission; this dual halo needs none and works either way.)
     private var contrastBlob: some View {
         RoundedRectangle(cornerRadius: 40, style: .continuous)
-            .fill(Color.black.opacity(0.16))
+            .fill(Color.black.opacity(0.30))
             .padding(-16)
-            .shadow(color: Color.black.opacity(0.55), radius: 34, y: 10)   // pops on light
+            .shadow(color: Color.black.opacity(0.6), radius: 34, y: 10)    // pops on light
             .shadow(color: Color.white.opacity(0.12), radius: 16)          // pops on dark
             .allowsHitTesting(false)
     }

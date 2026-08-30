@@ -228,7 +228,7 @@ extension View {
                 // real glass: genuine Liquid Glass refracts the actual pixels
                 // behind the window, so over a white page it would otherwise read
                 // much lighter than the smoked identity and thin the light text.
-                .background(shape.fill(Color.black.opacity(0.14)))
+                .background(shape.fill(Color.black.opacity(0.26)))
                 .glassEffect(.regular, in: shape)
                 .shadow(color: Color.black.opacity(shadow), radius: 14, y: 6)
         } else {
@@ -246,7 +246,7 @@ extension View {
     private func approximateGlass<S: Shape>(_ shape: S, shadow: Double) -> some View {
         background(
             shape.fill(.ultraThinMaterial)
-                .overlay(shape.fill(Color.black.opacity(0.20)))
+                .overlay(shape.fill(Color.black.opacity(0.34)))
                 .shadow(color: Color.black.opacity(shadow), radius: 14, y: 6)
         )
         .overlay(
