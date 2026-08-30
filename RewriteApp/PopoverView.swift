@@ -83,24 +83,21 @@ struct PopoverView: View {
             if voiceMode {
                 VoiceOverlayView(speech: speech, onDone: finishVoice, onCancel: cancelVoice)
             } else {
-                // The header and composer float as glass; the content scrolls
-                // full-height UNDER them (safe-area insets), so the chat shows
-                // through and behind the glass instead of stopping at a solid bar.
+                // Background-less design: the window is fully transparent — only
+                // the floating glass elements draw. Settings/Chats are the
+                // exception: dense surfaces that render on one big glass card.
                 Group {
                     switch panel {
-                    case .main:
-                        threadView.safeAreaInset(edge: .bottom, spacing: 0) { composer }
-                    case .settings: SettingsView()
-                    case .history:  historyPanel
+                    case .main:     mainSurface
+                    case .settings: panelCard(title: "Settings") { SettingsView() }
+                    case .history:  panelCard(title: "Chats") { historyPanel }
                     }
                 }
-                .safeAreaInset(edge: .top, spacing: 0) { specBar }
-                // Esc dismisses a torn-off floating window (no-op while docked).
+                // Esc dismisses the floating surface.
                 .onExitCommand { NotificationCenter.default.post(name: .rewriteCloseWindow, object: nil) }
             }
         }
         .frame(width: 380, height: 668)
-        .ambientBackground()
         .onAppear { autoFillFromClipboard(); injectWhatsNewIfNeeded() }
         .onChange(of: settings.mode) { _, _ in selectedAction = nil; composerMode = .text; showSelectPrompt = false; injectWhatsNewIfNeeded() }
         // Host is dismissing a torn-off window while dictation is live — end it
@@ -116,50 +113,46 @@ struct PopoverView: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Main surface (background-less)
 
-    /// Compact one-row header: History (left) · mode pill (center) · Settings (right).
-    private var specBar: some View {
-        HStack(spacing: 8) {
-            IconButton(systemName: "clock.arrow.circlepath", active: panel == .history, help: "Chats") {
-                panel = (panel == .history) ? .main : .history
-            }
-            Spacer(minLength: 6)
-            if panel == .main {
-                modeSegmented($settings.mode, width: 200)
-            } else {
-                Text(panel == .settings ? "Settings" : "Chats")
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
-                    .padding(.horizontal, 16).padding(.vertical, 7)
-                    .glassFloat(Capsule())
-            }
-            Spacer(minLength: 6)
-            // Settings now lives in the menu-bar menu; this top-right control is a
-            // Close (✕) that dismisses the window — except inside Settings, where
-            // it's a Back chevron returning to the chat.
-            IconButton(systemName: panel == .settings ? "chevron.left" : "xmark",
-                       active: panel == .settings,
-                       help: panel == .settings ? "Back" : "Close") {
-                if panel == .settings {
-                    panel = .main
-                } else {
+    /// The chat as floating glass over the desktop: thread on top, the composer
+    /// card, then the Writing/Prompt tab — nothing containing them. There is no
+    /// header; Chats/Settings live in the composer's tool row (and the menu-bar
+    /// right-click menu), ✕ is replaced by Esc / click-outside / icon toggle.
+    private var mainSurface: some View {
+        VStack(spacing: 12) {
+            threadView
+            composer
+            modeSegmented($settings.mode, width: 200)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 10)
+        .padding(.bottom, 14)
+    }
+
+    /// Settings / Chats are dense surfaces that need a readable ground, so they
+    /// render on one big glass card with a small header row of their own.
+    private func panelCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                IconButton(systemName: "chevron.left", size: 30, help: "Back") { panel = .main }
+                Spacer()
+                Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                Spacer()
+                IconButton(systemName: "xmark", size: 30, help: "Close") {
                     NotificationCenter.default.post(name: .rewriteCloseWindow, object: nil)
                 }
             }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            content()
         }
-        .padding(.horizontal, 14).padding(.vertical, 11)
-        // Drag the header to tear the window off the menu bar into a floating,
-        // movable panel. Taps on the buttons/pill still win (minimumDistance).
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 8)
-                .onChanged { _ in NotificationCenter.default.post(name: .rewriteWindowDragChanged, object: nil) }
-                .onEnded { _ in NotificationCenter.default.post(name: .rewriteWindowDragEnded, object: nil) }
-        )
+        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+        .liquidGlass(RoundedRectangle(cornerRadius: 30, style: .continuous))
+        .padding(10)
     }
 
     /// Soft segmented WRITING / PROMPT pill, bound to any mode selection so it can
-    /// drive both the chat header and the History filter.
+    /// drive both the bottom tab and the Chats filter. Its own piece of glass.
     private func modeSegmented(_ selection: Binding<RewriteMode>, width: CGFloat = 200) -> some View {
         HStack(spacing: 0) {
             ForEach(RewriteMode.allCases) { m in
@@ -167,7 +160,7 @@ struct PopoverView: View {
                 Text(m.title.capitalized)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(active ? Theme.accentInk : Theme.textSecondary)
-                    .frame(maxWidth: .infinity).padding(.vertical, 6)
+                    .frame(maxWidth: .infinity).padding(.vertical, 7)
                     .background {
                         if active { Capsule().fill(Theme.accent) }
                     }
@@ -176,7 +169,7 @@ struct PopoverView: View {
             }
         }
         .padding(3)
-        .glassFloat(Capsule())
+        .liquidGlass(Capsule())
         .frame(width: width)
     }
 
@@ -205,22 +198,34 @@ struct PopoverView: View {
         markWhatsNewSeen()
     }
 
+    /// The thread floats bottom-anchored in an invisible viewport. Short chats
+    /// are a compact stack just above the composer; long ones scroll, and — with
+    /// no window edge to clip against — old bubbles FADE OUT at the top.
     private var threadView: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    if thread.isEmpty {
-                        emptyState
-                    } else {
-                        ForEach(thread) { turn in turnView(turn) }
+        GeometryReader { geo in
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if thread.isEmpty {
+                            emptyState
+                        } else {
+                            ForEach(thread) { turn in turnView(turn) }
+                        }
+                        Color.clear.frame(height: 1).id("bottom")
                     }
-                    Color.clear.frame(height: 1).id("bottom")
+                    .padding(.horizontal, 2)
+                    .padding(.top, 24)
+                    .frame(minHeight: geo.size.height, alignment: .bottom)
                 }
-                .padding(16)
-                .background(OverlayScrollers())
+                .onChange(of: thread) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
+                .mask(
+                    LinearGradient(stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .black, location: 0.09),
+                        .init(color: .black, location: 1),
+                    ], startPoint: .top, endPoint: .bottom)
+                )
             }
-            .frame(maxHeight: .infinity)
-            .onChange(of: thread) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
         }
     }
 
@@ -233,7 +238,9 @@ struct PopoverView: View {
                 .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
         }
-        .frame(maxWidth: .infinity).padding(.top, 40).padding(.horizontal, 18)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20).padding(.horizontal, 18)
+        .liquidGlass(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous))
     }
 
     @ViewBuilder
@@ -255,7 +262,10 @@ struct PopoverView: View {
                 .font(.system(size: 13.5)).foregroundStyle(Theme.textPrimary)
                 .textSelection(.enabled)
                 .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous).fill(Theme.panel))
+                // A step lighter than the reply glass, like the reference's grey pill.
+                .background(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous)
+                    .fill(Theme.fillTranslucent.opacity(0.10)))
+                .liquidGlass(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous))
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.leading, 36)
@@ -272,14 +282,14 @@ struct PopoverView: View {
             if turn.isStreaming && turn.text.isEmpty {
                 TypingDots()
                     .padding(.horizontal, 14).padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous).fill(Theme.surface))
+                    .liquidGlass(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous))
             } else {
                 bodyText(turn)
                     .font(.system(size: 13.5))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
                     .padding(.horizontal, 14).padding(.vertical, 11)
-                    .background(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous).fill(Theme.surface))
+                    .liquidGlass(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous))
                     .overlay {
                         if turn.isStreaming {
                             RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous)
@@ -440,15 +450,13 @@ struct PopoverView: View {
             }
             .padding(.horizontal, 13).padding(.vertical, 8)
             .background {
-                // Floating glass chip; accent fill when selected.
-                ZStack {
-                    if selected { Capsule().fill(Theme.accent) }
-                    else { Capsule().fill(.regularMaterial) }
-                }
-                .shadow(color: Color.black.opacity(0.18), radius: 5, y: 1)
+                // Quiet translucent chip ON the composer's glass (a nested
+                // material would fight the card); accent fill when selected.
+                if selected { Capsule().fill(Theme.accent) }
+                else { Capsule().fill(Theme.fillTranslucent.opacity(0.07)) }
             }
             .overlay {
-                if !selected { Capsule().stroke(Theme.fillTranslucent.opacity(0.10), lineWidth: 1) }
+                if !selected { Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1) }
             }
             .contentShape(Capsule())
         }
@@ -478,21 +486,62 @@ struct PopoverView: View {
 
     // MARK: - Composer (Siri bottom bar: + · glass field · mic/send)
 
+    /// One floating glass card: the field on top, the action chips, then the tool
+    /// row — New · Chats · Settings · (space) · Dictate · Send ⏎.
     private var composer: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             if showSelectPrompt && !draftIsEmpty { selectPrompt }
-            HStack(alignment: .bottom, spacing: 8) {
-                IconButton(systemName: "plus", size: 34,
+            composerField
+            actionBar
+            HStack(spacing: 8) {
+                IconButton(systemName: "plus", size: 32,
                            disabled: thread.isEmpty && draft.isEmpty && selectedAction == nil && composerMode == .text,
                            help: "New chat") {
                     newChat()
                 }
-                composerField
-                IconButton(systemName: "mic.fill", size: 34, help: "Dictate") { enterVoiceMode() }
+                IconButton(systemName: "clock.arrow.circlepath", size: 32, help: "Chats") { panel = .history }
+                IconButton(systemName: "gearshape", size: 32, help: "Settings") { panel = .settings }
+                Spacer(minLength: 4)
+                IconButton(systemName: "mic.fill", size: 32, help: "Dictate") { enterVoiceMode() }
+                sendControl
             }
-            actionBar
         }
-        .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 10)
+        .padding(14)
+        .liquidGlass(RoundedRectangle(cornerRadius: 28, style: .continuous))
+    }
+
+    /// The labeled primary action — Send ⏎, or Stop while streaming.
+    private var sendControl: some View {
+        Group {
+            if isLoading {
+                Button { currentTask?.cancel() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "stop.fill").font(.system(size: 11, weight: .bold))
+                        Text("Stop").font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(Theme.accentInk)
+                    .padding(.horizontal, 14).frame(height: 32)
+                    .background(Capsule().fill(Theme.accent))
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(".", modifiers: .command)
+            } else {
+                Button { sendDraft() } label: {
+                    HStack(spacing: 7) {
+                        Text("Send").font(.system(size: 13, weight: .semibold))
+                        Text("⏎").font(.system(size: 12, weight: .medium)).opacity(0.7)
+                    }
+                    .foregroundStyle(Theme.accentInk)
+                    .padding(.horizontal, 14).frame(height: 32)
+                    .background(Capsule().fill(Theme.accent)
+                        .shadow(color: Theme.accent.opacity(0.5), radius: 8, y: 2))
+                }
+                .buttonStyle(.plain)
+                .disabled(draftIsEmpty)
+                .opacity(draftIsEmpty ? 0.45 : 1)
+                .keyboardShortcut(.return, modifiers: .command)
+            }
+        }
     }
 
     /// Nudge shown above the input when you try to send without picking an action.
@@ -513,55 +562,24 @@ struct PopoverView: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.accent.opacity(0.4), lineWidth: 1))
     }
 
-    /// Growing pill input (1→~4 lines, then scrolls) with the send button inside.
+    /// Growing input (1→~4 lines, then scrolls). No pill of its own — it sits
+    /// directly on the composer's glass; Send lives in the tool row below.
     private var composerField: some View {
-        HStack(alignment: .bottom, spacing: 6) {
-            ZStack(alignment: .topLeading) {
-                if draftIsEmpty {
-                    Text(composerPlaceholder)
-                        .font(.system(size: 13.5))
-                        .foregroundStyle(Theme.textSecondary)
-                        .allowsHitTesting(false)
-                }
-                ComposerTextView(text: Binding(get: { draft }, set: { draft = $0 }),
-                                 maxLines: 4,
-                                 onFocusChange: { composerFocused = $0 })
+        ZStack(alignment: .topLeading) {
+            if draftIsEmpty {
+                Text(composerPlaceholder)
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(Theme.textSecondary)
+                    .allowsHitTesting(false)
             }
-            .padding(.leading, 10)
-            .padding(.vertical, 4)
-            if isLoading {
-                insideButton("stop.fill") { currentTask?.cancel() }
-                    .keyboardShortcut(".", modifiers: .command)
-            } else if !draftIsEmpty {
-                insideButton("arrow.up") { sendDraft() }
-                    .keyboardShortcut(.return, modifiers: .command)
-            }
+            ComposerTextView(text: Binding(get: { draft }, set: { draft = $0 }),
+                             maxLines: 4,
+                             onFocusChange: { composerFocused = $0 })
         }
-        .padding(.horizontal, 5).padding(.vertical, 5)
-        .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 21, style: .continuous).fill(.regularMaterial)
-            .shadow(color: Color.black.opacity(0.20), radius: 6, y: 2))
-        .overlay(RoundedRectangle(cornerRadius: 21, style: .continuous).stroke(composerBorder, lineWidth: 1))
+        .padding(.horizontal, 4).padding(.top, 2)
         // Enter sends; Shift+Enter inserts a newline. A window-local key monitor
-        // (not SwiftUI's .onKeyPress, which leaks Return inside an NSPopover and
-        // dismisses it) consumes Return before the field/popover can act on it.
+        // consumes Return before the field (or the window) can act on it.
         .background(SubmitKeyMonitor(onSubmit: { if !isLoading { sendDraft() } }))
-    }
-
-    /// The send / stop button that lives inside the input pill.
-    private func insideButton(_ icon: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon).font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Theme.accentInk)
-                .frame(width: 28, height: 28)
-                .background(Circle().fill(Theme.accent))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var composerBorder: Color {
-        (composerMode == .instruction || composerFocused)
-            ? Theme.accent.opacity(0.6) : Theme.fillTranslucent.opacity(0.08)
     }
 
     private var composerPlaceholder: String {
@@ -911,6 +929,7 @@ struct PopoverView: View {
         let captured = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         if speech.isRecording { speech.stop() }
         voiceMode = false
+        NotificationCenter.default.post(name: .rewriteVoiceEnded, object: nil)
         if !captured.isEmpty { draft = draft.isEmpty ? captured : draft + " " + captured }
         // The composer view is rebuilt on return from voice and re-focuses itself.
     }
@@ -918,6 +937,7 @@ struct PopoverView: View {
     private func cancelVoice() {
         if speech.isRecording { speech.stop() }
         voiceMode = false
+        NotificationCenter.default.post(name: .rewriteVoiceEnded, object: nil)
     }
 
     // MARK: - Clipboard

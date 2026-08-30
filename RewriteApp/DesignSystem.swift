@@ -54,7 +54,7 @@ enum Metric {
     static let radius: CGFloat = 18
     static let buttonRadius: CGFloat = 12
     static let cardRadius: CGFloat = 16
-    static let bubbleRadius: CGFloat = 20
+    static let bubbleRadius: CGFloat = 24
     static let field: CGFloat = 14
     static let window: CGFloat = 12
 }
@@ -203,5 +203,40 @@ extension View {
     func glassFloat<S: Shape>(_ shape: S, stroke: Double = 0.10, shadow: Double = 0.20) -> some View {
         background(shape.fill(.regularMaterial).shadow(color: Color.black.opacity(shadow), radius: 6, y: 2))
             .overlay(shape.stroke(Theme.fillTranslucent.opacity(stroke), lineWidth: 1))
+    }
+
+    /// Liquid glass for the background-less popover: on macOS 26+ (Tahoe) this is
+    /// the REAL system Liquid Glass (`.glassEffect`) — true refraction of whatever
+    /// is behind the window. On older macOS (and older build toolchains) it falls
+    /// back to the closest hand-built approximation: ultra-thin material, a top
+    /// light-catch, and a soft lift shadow. Every floating element wears this.
+    @ViewBuilder
+    func liquidGlass<S: Shape>(_ shape: S, shadow: Double = 0.30) -> some View {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            self
+                .glassEffect(.regular, in: shape)
+                .shadow(color: Color.black.opacity(shadow), radius: 14, y: 6)
+        } else {
+            approximateGlass(shape, shadow: shadow)
+        }
+        #else
+        approximateGlass(shape, shadow: shadow)
+        #endif
+    }
+
+    /// The pre-Tahoe stand-in for liquid glass. Kept separate so the availability
+    /// branches above stay trivially readable.
+    private func approximateGlass<S: Shape>(_ shape: S, shadow: Double) -> some View {
+        background(
+            shape.fill(.ultraThinMaterial)
+                .shadow(color: Color.black.opacity(shadow), radius: 14, y: 6)
+        )
+        .overlay(
+            shape.stroke(
+                LinearGradient(colors: [Color.white.opacity(0.35), Color.white.opacity(0.08)],
+                               startPoint: .top, endPoint: .bottom),
+                lineWidth: 1)
+        )
     }
 }

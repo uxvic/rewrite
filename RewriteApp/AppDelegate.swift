@@ -1,9 +1,8 @@
 import AppKit
 import SwiftUI
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem!
-    private var popover: NSPopover!
     private var welcomeWindow: NSWindow?
     /// The standalone ChatGPT-style window (opened on demand). Kept alive across
     /// close so its conversation state persists; only nilled on quit.
@@ -11,20 +10,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     private var clickMonitor: Any?
     private let hotKey = HotKeyManager()
 
-    /// The SwiftUI content is hosted ONCE and reused, so moving it between the
-    /// docked popover and the torn-off floating panel preserves all in-progress
-    /// state (conversation, draft, active dictation).
+    /// The SwiftUI content is hosted ONCE and reused, so hiding/showing the glass
+    /// panel preserves all in-progress state (conversation, draft, dictation).
     private var contentVC: FirstMouseHostingController<PopoverView>!
-    /// The floating, persistent window the content tears off into (on drag or
-    /// when dictation starts). `nil` while docked.
-    private var detachedPanel: FloatingPanel?
-    /// Timer that polls the cursor to follow it during a tear-off drag. Polling
-    /// (vs. an event monitor) is reliable across the popover→panel window swap,
-    /// where the in-flight drag's events route to the now-closed popover window.
-    private var dragFollowTimer: Timer?
-    /// Cursor offset within the panel at the moment of tear-off, so the window
-    /// tracks the pointer at the same relative point while dragging.
-    private var dragGrabOffset: NSPoint = .zero
+    /// The ONE quick surface: a borderless, fully transparent floating panel under
+    /// the menu-bar icon. There is no popover chrome and no window background —
+    /// only the SwiftUI glass elements render. (This replaced NSPopover when the
+    /// popover went background-less; NSPopover always paints its own frame.)
+    private var glassPanel: FloatingPanel?
+    /// Live dictation must survive clicks into other apps, so while it's on we
+    /// skip the auto-close paths (outside click / app deactivation).
+    private var voiceActive = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -35,27 +31,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
-        popover = NSPopover()
-        popover.contentSize = NSSize(width: 380, height: 668)
-        // We drive dismissal ourselves (global click monitor + resign-active) so
-        // clicking outside reliably closes it on this menu-bar agent app, where
-        // .transient is unreliable after we activate + makeKey the popover window.
-        popover.behavior = .applicationDefined
-        popover.delegate = self
         // First-mouse hosting so a single click registers even when the agent
-        // app's popover window isn't the key window (fixes "click twice to act").
+        // app's panel isn't the key window (fixes "click twice to act").
         contentVC = FirstMouseHostingController(rootView: PopoverView())
-        popover.contentViewController = contentVC
 
         registerHotKeys()
         let nc = NotificationCenter.default
         nc.addObserver(self, selector: #selector(registerHotKeys), name: .hotKeysChanged, object: nil)
         nc.addObserver(self, selector: #selector(appResignedActive),
                        name: NSApplication.didResignActiveNotification, object: nil)
-        // Tear-off + voice-persistence signals from the SwiftUI content.
-        nc.addObserver(self, selector: #selector(voiceActivated), name: .rewriteVoiceActivated, object: nil)
-        nc.addObserver(self, selector: #selector(windowDragChanged), name: .rewriteWindowDragChanged, object: nil)
-        nc.addObserver(self, selector: #selector(windowDragEnded), name: .rewriteWindowDragEnded, object: nil)
+        // Voice-persistence signals from the SwiftUI content.
+        nc.addObserver(self, selector: #selector(voiceStarted), name: .rewriteVoiceActivated, object: nil)
+        nc.addObserver(self, selector: #selector(voiceEnded), name: .rewriteVoiceEnded, object: nil)
         nc.addObserver(self, selector: #selector(closeWindow), name: .rewriteCloseWindow, object: nil)
 
         _ = AppUpdater.shared   // starts Sparkle + scheduled checks
@@ -218,194 +205,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
 
     @objc func togglePopover(_ sender: Any?) {
-        // The menu-bar icon is a toggle: if a torn-off floating window is open,
-        // clicking the icon closes it (redocks) — regardless of whether it's the
-        // focused window. Previously this only closed when the panel was key, so
-        // after dragging it elsewhere and clicking away, the icon just re-focused
-        // it and the only way to close was the ✕.
-        if detachedPanel != nil {
-            redock()
-            return
+        if let panel = glassPanel, panel.isVisible { hideGlassPanel() } else { showGlassPanel() }
+    }
+
+    /// The size of the invisible panel. Content inside is bottom-anchored glass
+    /// elements; the unused upper area renders nothing.
+    private static let panelSize = NSSize(width: 380, height: 668)
+
+    /// Shows the background-less quick surface: a transparent, borderless panel
+    /// anchored under the menu-bar icon. Only the SwiftUI glass elements draw.
+    private func showGlassPanel() {
+        let panel: FloatingPanel
+        if let existing = glassPanel {
+            panel = existing
+        } else {
+            panel = FloatingPanel(
+                contentRect: NSRect(origin: .zero, size: Self.panelSize),
+                styleMask: [.borderless],
+                backing: .buffered, defer: false)
+            panel.level = .floating
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            panel.hidesOnDeactivate = false
+            panel.isMovableByWindowBackground = true
+            // No window shadow: the window is invisible — each glass element
+            // draws its own shadow instead.
+            panel.hasShadow = false
+            panel.isOpaque = false
+            panel.backgroundColor = .clear
+            panel.isReleasedWhenClosed = false
+            panel.contentViewController = contentVC
+            glassPanel = panel
         }
-        if popover.isShown { closePopover() } else { showPopover() }
-    }
 
-    private func showPopover() {
-        guard let button = statusItem.button else { return }
-        // The quick popover is always available for capture-anywhere — even with the
-        // full window open. We activate so the composer can take keystrokes; because
-        // the app is a menu-bar agent (.accessory, never .regular), activating no
-        // longer switches Spaces or drags the window over the app you're in, so the
-        // popover just floats over your current app and the window stays put.
-        NSApp.activate(ignoringOtherApps: true)
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        popover.contentViewController?.view.window?.makeKey()
-        // A global monitor fires for clicks that land in another app or the desktop
-        // (never for clicks inside our own popover), so this closes on "click outside".
-        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            self?.closePopover()
-        }
-    }
-
-    private func closePopover() {
-        if let monitor = clickMonitor { NSEvent.removeMonitor(monitor); clickMonitor = nil }
-        if popover.isShown { popover.performClose(nil) }
-    }
-
-    /// Cleans up the monitor however the popover was closed (toggle, Esc, etc.).
-    @objc func popoverDidClose(_ notification: Notification) {
-        if let monitor = clickMonitor { NSEvent.removeMonitor(monitor); clickMonitor = nil }
-    }
-
-    /// Only closes the DOCKED popover. A torn-off panel (drag / dictation) is
-    /// persistent, so it intentionally survives app deactivation.
-    @objc private func appResignedActive() { closePopover() }
-
-    // MARK: - Tear-off into a floating panel
-
-    /// Moves the shared content out of the popover into a persistent floating
-    /// panel positioned where the popover was. Reusing `contentVC` preserves all
-    /// SwiftUI state. `grabUnderCursor` starts a live drag-follow for tear-off.
-    private func detachIntoPanel(grabUnderCursor: Bool) {
-        guard detachedPanel == nil else { return }
-        // Use the CONTENT's on-screen rect (not the popover window frame, which
-        // includes the arrow + chrome) so the panel appears exactly where the
-        // content was — no visible jump at tear-off.
-        let frame: NSRect = {
-            guard let view = popover.contentViewController?.view, let win = view.window else {
-                return defaultDetachFrame()
-            }
-            return win.convertToScreen(view.convert(view.bounds, to: nil))
-        }()
-
-        // Detach the content and tear down the docked popover + its click monitor.
-        if let monitor = clickMonitor { NSEvent.removeMonitor(monitor); clickMonitor = nil }
-        popover.contentViewController = nil
-        if popover.isShown { popover.performClose(nil) }
-
-        let panel = FloatingPanel(
-            contentRect: frame,
-            styleMask: [.borderless],
-            backing: .buffered, defer: false)
-        panel.level = .floating
-        // Stay visible across Spaces and full-screen apps, and don't auto-hide
-        // when our agent app is no longer active — that's the whole point.
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.hidesOnDeactivate = false
-        panel.isMovableByWindowBackground = true
-        panel.hasShadow = true
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.contentViewController = contentVC
-        if let cv = panel.contentView {
-            cv.wantsLayer = true
-            cv.layer?.cornerRadius = Metric.window
-            cv.layer?.masksToBounds = true
-        }
-        panel.setFrame(frame, display: true)
-        detachedPanel = panel
+        panel.setFrame(anchoredPanelFrame(), display: true)
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
 
-        // After tear-off the composer re-focuses and AppKit selects ALL its text;
-        // a stray keystroke would then wipe the draft. Collapse the selection to the
-        // end (keep focus, nothing selected) once focus settles. No-ops in voice mode
-        // (the torn-off content has no text field, so the cast fails).
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak panel] in
-            guard let tv = panel?.firstResponder as? NSTextView else { return }
-            tv.setSelectedRange(NSRange(location: (tv.string as NSString).length, length: 0))
-        }
-
-        if grabUnderCursor {
-            let m = NSEvent.mouseLocation
-            dragGrabOffset = NSPoint(x: m.x - panel.frame.origin.x, y: m.y - panel.frame.origin.y)
-            // Follow the cursor for the rest of THIS drag, independent of whether
-            // the SwiftUI gesture survives the window change.
-            startDragFollow()
-        }
-    }
-
-    /// Moves the content back into the popover (hidden) and disposes the panel, so
-    /// the next open is docked again — with state intact (same `contentVC`).
-    private func redock() {
-        stopDragFollow()
-        guard let panel = detachedPanel else { return }
-        // If dictation is live in the panel, end it cleanly so the mic is released.
-        NotificationCenter.default.post(name: .rewriteForceExitVoice, object: nil)
-        panel.contentViewController = nil
-        panel.orderOut(nil)
-        detachedPanel = nil
-        popover.contentViewController = contentVC
-    }
-
-    private func startDragFollow() {
-        stopDragFollow()
-        let timer = Timer(timeInterval: 1.0 / 120.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            // Stop once the left button is released — works even if the drag's
-            // mouse-up never reaches us after the window swap.
-            if NSEvent.pressedMouseButtons & 0x1 == 0 {
-                self.stopDragFollow()
-            } else {
-                self.moveDetachedToCursor()
+        // A global monitor fires for clicks that land in another app or the desktop
+        // (never inside our own panel), so this closes on "click outside" — except
+        // while dictation is live, which must survive clicking around.
+        if clickMonitor == nil {
+            clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                guard let self, !self.voiceActive else { return }
+                self.hideGlassPanel()
             }
         }
-        RunLoop.main.add(timer, forMode: .common)
-        dragFollowTimer = timer
     }
 
-    private func stopDragFollow() {
-        dragFollowTimer?.invalidate()
-        dragFollowTimer = nil
+    private func hideGlassPanel() {
+        if let monitor = clickMonitor { NSEvent.removeMonitor(monitor); clickMonitor = nil }
+        // If dictation is live, end it cleanly so the mic is released.
+        if voiceActive { NotificationCenter.default.post(name: .rewriteForceExitVoice, object: nil) }
+        voiceActive = false
+        glassPanel?.orderOut(nil)
     }
 
-    private func moveDetachedToCursor() {
-        guard let panel = detachedPanel else { return }
-        let m = NSEvent.mouseLocation
-        panel.setFrameOrigin(NSPoint(x: m.x - dragGrabOffset.x, y: m.y - dragGrabOffset.y))
+    /// The panel frame tucked under the menu-bar icon (centered on it, clamped to
+    /// the screen), like the popover used to sit.
+    private func anchoredPanelFrame() -> NSRect {
+        let size = Self.panelSize
+        guard let button = statusItem.button, let bwin = button.window else {
+            let vis = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+            return NSRect(x: vis.midX - size.width / 2, y: vis.maxY - size.height - 8,
+                          width: size.width, height: size.height)
+        }
+        let bframe = bwin.convertToScreen(button.convert(button.bounds, to: nil))
+        var x = bframe.midX - size.width / 2
+        if let vis = (bwin.screen ?? NSScreen.main)?.visibleFrame {
+            x = min(max(x, vis.minX + 8), vis.maxX - size.width - 8)
+        }
+        let y = bframe.minY - size.height - 6
+        return NSRect(x: x, y: y, width: size.width, height: size.height)
     }
 
-    /// Centered fallback when we can't read the popover's on-screen frame.
-    private func defaultDetachFrame() -> NSRect {
-        let size = NSSize(width: 380, height: 668)
-        let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        return NSRect(x: screen.midX - size.width / 2,
-                      y: screen.midY - size.height / 2,
-                      width: size.width, height: size.height)
+    /// Closes the quick surface on app deactivation — except while dictation is
+    /// live, which is exactly when the user is off in another app talking.
+    @objc private func appResignedActive() {
+        if !voiceActive { hideGlassPanel() }
     }
 
     // MARK: - Content signals
 
-    @objc private func voiceActivated() {
-        // Dictation must persist regardless of clicks/app switches — detach if
-        // we're still docked. (No drag-follow; it just floats in place.)
-        if detachedPanel == nil { detachIntoPanel(grabUnderCursor: false) }
-    }
+    @objc private func voiceStarted() { voiceActive = true }
+    @objc private func voiceEnded() { voiceActive = false }
 
-    @objc private func windowDragChanged() {
-        if detachedPanel == nil {
-            detachIntoPanel(grabUnderCursor: true)   // tear off + begin follow
-        } else {
-            moveDetachedToCursor()
-        }
-    }
+    /// The ✕ / Esc from the content: dismiss the quick surface.
+    @objc private func closeWindow() { hideGlassPanel() }
 
-    @objc private func windowDragEnded() { stopDragFollow() }
-
-    /// The header ✕ / Esc: dismiss whatever surface is showing.
-    @objc private func closeWindow() {
-        if detachedPanel != nil { redock() } else { closePopover() }
-    }
-
-    /// Menu-bar "Settings…": make sure a window is showing, then switch it to the
-    /// Settings panel.
+    /// Menu-bar "Settings…": make sure the quick surface is showing, then switch
+    /// it to the Settings panel.
     @objc private func openSettings() {
-        if let panel = detachedPanel {
-            NSApp.activate(ignoringOtherApps: true)
-            panel.makeKeyAndOrderFront(nil)
-        } else if !popover.isShown {
-            showPopover()
-        }
+        showGlassPanel()
         NotificationCenter.default.post(name: .rewriteShowSettings, object: nil)
     }
 
@@ -462,8 +352,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 /// tear-off and dictation persistence.
 extension Notification.Name {
     static let rewriteVoiceActivated   = Notification.Name("RewriteVoiceActivated")
-    static let rewriteWindowDragChanged = Notification.Name("RewriteWindowDragChanged")
-    static let rewriteWindowDragEnded   = Notification.Name("RewriteWindowDragEnded")
+    static let rewriteVoiceEnded       = Notification.Name("RewriteVoiceEnded")
     static let rewriteCloseWindow       = Notification.Name("RewriteCloseWindow")
     static let rewriteShowSettings      = Notification.Name("RewriteShowSettings")
     static let rewriteForceExitVoice    = Notification.Name("RewriteForceExitVoice")
