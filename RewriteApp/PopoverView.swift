@@ -111,6 +111,10 @@ struct PopoverView: View {
         .frame(width: 380, height: 668)
         .quickSurfaceBackground()
         .onAppear { autoFillFromClipboard(); injectWhatsNewIfNeeded() }
+        .onReceive(NotificationCenter.default.publisher(for: .rewritePanelWillShow)) { _ in
+            autoFillFromClipboard()
+            injectWhatsNewIfNeeded()
+        }
         // Host is dismissing a torn-off window while dictation is live — end it
         // cleanly so the mic is released.
         .onReceive(NotificationCenter.default.publisher(for: .rewriteForceExitVoice)) { _ in
@@ -1100,6 +1104,7 @@ struct PopoverView: View {
         let captured = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         if speech.isRecording { speech.stop() }
         voiceMode = false
+        NotificationCenter.default.post(name: .rewriteVoiceEnded, object: nil)
         if !captured.isEmpty { draft = draft.isEmpty ? captured : draft + " " + captured }
         // The composer view is rebuilt on return from voice and re-focuses itself.
     }
@@ -1107,6 +1112,7 @@ struct PopoverView: View {
     private func cancelVoice() {
         if speech.isRecording { speech.stop() }
         voiceMode = false
+        NotificationCenter.default.post(name: .rewriteVoiceEnded, object: nil)
     }
 
     // MARK: - Clipboard
