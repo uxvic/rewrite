@@ -14,7 +14,7 @@ Owner: CODEX
 - [x] Collapse Writing and Prompt into one Rewrite flow with a safe local-data migration.
 - [x] Establish Rewrite and Clipboard as separate quick-surface destinations.
 - [ ] Redesign the quick menu-bar Rewrite surface.
-- [ ] Build private local clipboard capture, storage, retention, and "send to Rewrite" behaviour.
+- [x] Build private local clipboard capture, bounded retention, and "send to Rewrite" behaviour.
 - [ ] Redesign the retained main Rewrite window.
 - [ ] Verify build, native interactions, accessibility, and motion; add targeted tests and repair CI triggers.
 
@@ -173,3 +173,11 @@ Owner set to CODEX. Nothing is reserved by Claude; all files are free.
 - Grouped the quick surface's nearby native-glass controls in `RewriteApp/PopoverView.swift` so their refraction reads as one system composition rather than unrelated translucent widgets.
 - Replaced the main window's stale, misleading Writing/Prompt one-item toggle with a single `Rewrite` label in `RewriteApp/MainWindowView.swift`. This is a necessary shared-mode correction, not the deferred main-window redesign.
 - `./script/build_and_run.sh --verify` passed, with no remaining deprecated mode warnings. Next: manual visual review of the quick surface against the references, then the local-only clipboard capture layer. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `76f11a6`
+
+- Added `RewriteApp/ClipboardStore.swift`. Clipboard History begins automatically on launch, watches only new general-pasteboard changes while Rewrite is running, and retains the 100 newest normal text copies locally. It rejects empty, oversized, concealed, and transient content, records no source-app metadata, and never sends a clip to a provider by itself.
+- Connected the store to the menu-bar Clipboard destination in `RewriteApp/PopoverView.swift`. A history row can be copied, removed, cleared, or placed into the Rewrite composer. Placing it there does **not** submit it.
+- Added the enabled-by-default `Clipboard history` setting in `RewriteApp/AppSettings.swift` and `RewriteApp/SettingsView.swift`; switching it off stops new capture. Debug builds persist the test history separately from installed Rewrite data.
+- Updated the app lifecycle, privacy description, and Xcode project file. `./script/build_and_run.sh --verify` and `git diff --check` passed.
+- Next: Victor's manual visual and interaction check of the quick surface against the supplied Siri references. Remaining engineering work is the component extraction, retained main-window redesign, and targeted interaction/accessibility/motion testing. Owner remains CODEX.
