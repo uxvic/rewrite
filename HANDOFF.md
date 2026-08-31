@@ -70,3 +70,10 @@ Owner: CODEX
 - Clipboard History uses one bounded black-glass card with a local item count, quiet row dividers, explicit Copy and Use actions, and a confirmation before Clear. Use returns text to the Rewrite composer without sending it to a provider. The redundant Settings clear button was removed; the Settings capture toggle remains.
 - Verified with `./script/build_and_run.sh --verify`. The menu-bar panel itself still needs direct visual verification through the actual status-item interaction; the accessibility inspector exposes the retained main window but not this detached surface.
 - Next: replace the scrolling action rail with four direct actions and a compact overflow menu, then mirror that behavior in the main window. No files are reserved for Claude. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `5cd0522`
+
+- Defined shared compact action groups in `RewriteApp/RewriteMode.swift`: direct Improve, Paraphrase, and Fix Grammar actions; the remaining rewrite transformations; and the prompt tools.
+- This is a data-only refactor used to keep the forthcoming popover and main-window controls in sync. It does not alter the panel host, glass treatment, or provider behaviour on its own.
+- Verified with `./script/build_and_run.sh --verify`.
+- Next: apply the four-action row plus native overflow menu to the floating Rewrite composer. No files are reserved for Claude. Owner remains CODEX.
