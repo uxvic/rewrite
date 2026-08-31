@@ -44,6 +44,35 @@ enum RewriteMode: String, Identifiable, Codable {
                 + "without changing the meaning, tone, or language."))
     }
 
+    /// The few transformations that deserve dedicated space in the compact
+    /// floating composer. `Improve` is the predictable, non-Smart default;
+    /// Smart remains a separate intent-aware choice in the UI.
+    var quickActions: [PresetAction] {
+        [defaultAction] + actions.filter { Self.quickActionIDs.contains($0.id) }
+    }
+
+    /// Remaining established writing transformations, displayed under the
+    /// Rewrite section of the compact Actions menu.
+    var overflowRewriteActions: [PresetAction] {
+        actions.filter {
+            RewriteAction(rawValue: $0.id) != nil && !Self.quickActionIDs.contains($0.id)
+        }
+    }
+
+    /// Prompt engineering is part of the one Rewrite flow, but belongs in its
+    /// own menu section so the direct action row remains legible.
+    var promptToolActions: [PresetAction] {
+        actions.filter { RewriteAction(rawValue: $0.id) == nil }
+    }
+
+    /// All non-direct actions, useful for selection-state checks shared by the
+    /// popover and the retained main window.
+    var overflowActions: [PresetAction] {
+        overflowRewriteActions + promptToolActions
+    }
+
+    private static let quickActionIDs: Set<String> = ["paraphrase", "grammar"]
+
     // MARK: - Prompt-engineering actions
 
     private static func promptPrompt(_ instruction: String) -> String {
