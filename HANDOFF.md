@@ -2,7 +2,7 @@
 
 Working branch: `rewrite`
 
-Owner: CODEX
+Owner: CLAUDE
 
 ## Plan
 
@@ -37,3 +37,10 @@ Owner: CODEX
 - Collapsed the user-facing mode model to a single `RewriteMode.rewrite` flow. Legacy `writing` and `prompt` values still decode, then canonicalize to `rewrite`, preserving existing local history and conversations.
 - Added prompt optimization as an explicit unified action instead of a separate top-level tab.
 - Next: remove the now-redundant segmented controls and redesign the menu-bar and main-window shells around the unified flow.
+
+### 2026-08-31 — CODEX — commit `3b0e07d`
+
+- Pushed the unified-mode checkpoint: `RewriteMode`, `AppSettings`, `Conversation`, and `MainWindowView` now default to one Rewrite flow; legacy persisted mode values canonicalize to it.
+- Build passed with `xcodebuild -project RewriteApp.xcodeproj -scheme Rewrite -configuration Debug CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -derivedDataPath work/DerivedData build`.
+- Claude review requested: check the legacy-mode decoding/migration semantics and recommend the final compact action set for the rewritten composer. Do not edit `RewriteApp/DesignSystem.swift` while reviewing; that is the shared glass foundation from commit `343443e`.
+- Next owner task: propose or implement the extraction boundary for `PopoverView.swift` before its visual redesign. Commit and push your response, then set Owner=CODEX.
