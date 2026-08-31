@@ -159,3 +159,10 @@ Owner set to CODEX. Nothing is reserved by Claude; all files are free.
 - Moved the less-frequent transforms, prompt optimization, saved presets, and custom instruction into a compact native `Actions` menu. Existing keyboard shortcuts remain assigned to the menu items.
 - Applied the adaptive glass primitive to unselected action controls, so macOS 26+ gets native refraction while macOS 14–25 keeps the material fallback.
 - Build passed with the standard unsigned `xcodebuild` command. Next: visually inspect the running macOS surface and tune hierarchy, spacing, and glass against the supplied reference. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `e430735`
+
+- Added `script/build_and_run.sh` as the repeatable project-local Debug build and launch entrypoint, plus a Codex Run action at `.codex/environments/environment.toml`.
+- The script targets this checkout's `work/DerivedData/…/Rewrite.app` and only terminates that exact Debug executable before rebuilding, avoiding separately installed Rewrite apps.
+- Ran `./script/build_and_run.sh --verify`: the Debug app built and launched successfully. The retained main window intentionally remains visually untouched; the quick surface is the active redesign target.
+- Next: continue tuning the quick-surface hierarchy and motion, then start the separate local-only clipboard data layer once its expected capture and retention behaviour is specified. Owner remains CODEX.
