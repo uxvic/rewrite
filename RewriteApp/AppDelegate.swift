@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // First-mouse hosting so a single click registers even when the agent
         // app's panel isn't the key window (fixes "click twice to act").
         contentVC = FirstMouseHostingController(rootView: PopoverView())
+        ClipboardStore.shared.start()
 
         registerHotKeys()
         let nc = NotificationCenter.default
