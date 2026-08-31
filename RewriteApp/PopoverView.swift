@@ -41,8 +41,9 @@ struct PopoverView: View {
     @StateObject private var speech = SpeechManager()
 
     @State private var threadByMode: [RewriteMode: [ChatTurn]] = [:]
-    // The draft is shared across modes (so a half-typed message survives a
-    // Writing↔Prompt switch); only the conversations stay divided by mode.
+    // Rewrite is one continuous conversation. This dictionary remains in place
+    // for now to avoid disrupting the streaming mutation helpers below, but it
+    // is always addressed through the canonical unified mode.
     @State private var draft: String = ""
     @State private var composerMode: ComposerMode = .text
     @State private var selectedAction: SelectedAction?
@@ -59,17 +60,30 @@ struct PopoverView: View {
     @State private var lastClipboardCount = -1
 
     private enum Panel { case main, settings, history }
+    private enum WorkspaceTab: CaseIterable {
+        case rewrite
+        case clipboard
+
+        var title: String {
+            switch self {
+            case .rewrite: "Rewrite"
+            case .clipboard: "Clipboard"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .rewrite: "sparkles"
+            case .clipboard: "clipboard"
+            }
+        }
+    }
     @State private var panel: Panel = .main
+    @State private var workspaceTab: WorkspaceTab = .rewrite
 
-    /// Which mode's rewrites the History panel is showing (its own Writing/Prompt
-    /// tab, independent of the chat's active mode).
-    @State private var historyMode: RewriteMode = .writing
-
-    /// Writing and Prompt keep separate conversations + drafts, keyed by mode,
-    /// so switching tabs never mixes their messages.
     private var thread: [ChatTurn] {
-        get { threadByMode[settings.mode] ?? [] }
-        nonmutating set { threadByMode[settings.mode] = newValue }
+        get { threadByMode[.rewrite] ?? [] }
+        nonmutating set { threadByMode[.rewrite] = newValue }
     }
 
     var body: some View {
@@ -83,7 +97,7 @@ struct PopoverView: View {
                 Group {
                     switch panel {
                     case .main:
-                        threadView.safeAreaInset(edge: .bottom, spacing: 0) { composer }
+                        workspaceContent
                     case .settings: SettingsView()
                     case .history:  historyPanel
                     }
@@ -96,7 +110,6 @@ struct PopoverView: View {
         .frame(width: 380, height: 668)
         .ambientBackground()
         .onAppear { autoFillFromClipboard(); injectWhatsNewIfNeeded() }
-        .onChange(of: settings.mode) { _, _ in selectedAction = nil; composerMode = .text; showSelectPrompt = false; injectWhatsNewIfNeeded() }
         // Host is dismissing a torn-off window while dictation is live — end it
         // cleanly so the mic is released.
         .onReceive(NotificationCenter.default.publisher(for: .rewriteForceExitVoice)) { _ in
@@ -112,7 +125,8 @@ struct PopoverView: View {
 
     // MARK: - Header
 
-    /// Compact one-row header: History (left) · mode pill (center) · Settings (right).
+    /// Compact floating header: rewrite/history controls stay available while the
+    /// two product destinations share one visual shell.
     private var specBar: some View {
         HStack(spacing: 8) {
             IconButton(systemName: "clock.arrow.circlepath", active: panel == .history, help: "History") {
@@ -120,7 +134,7 @@ struct PopoverView: View {
             }
             Spacer(minLength: 6)
             if panel == .main {
-                modeSegmented($settings.mode, width: 200)
+                workspaceTabs
             } else {
                 Text(panel == .settings ? "Settings" : "History")
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
@@ -152,26 +166,41 @@ struct PopoverView: View {
         )
     }
 
-    /// Soft segmented WRITING / PROMPT pill, bound to any mode selection so it can
-    /// drive both the chat header and the History filter.
-    private func modeSegmented(_ selection: Binding<RewriteMode>, width: CGFloat = 200) -> some View {
+    /// A small native-feeling destination switcher. This replaces the old
+    /// Writing/Prompt control: Rewrite is the unified assistant, Clipboard is a
+    /// first-class surface whose private local capture layer follows next.
+    private var workspaceTabs: some View {
         HStack(spacing: 0) {
-            ForEach(RewriteMode.allCases) { m in
-                let active = selection.wrappedValue == m
-                Text(m.title.capitalized)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(active ? Theme.accentInk : Theme.textSecondary)
-                    .frame(maxWidth: .infinity).padding(.vertical, 6)
+            ForEach(WorkspaceTab.allCases, id: \.self) { tab in
+                let active = workspaceTab == tab
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        workspaceTab = tab
+                        selectedAction = nil
+                        composerMode = .text
+                        showSelectPrompt = false
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: tab.systemImage).font(.system(size: 10.5, weight: .semibold))
+                        Text(tab.title).font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(active ? Theme.textPrimary : Theme.textSecondary)
+                    .frame(maxWidth: .infinity).padding(.vertical, 7)
                     .background {
-                        if active { Capsule().fill(Theme.accent) }
+                        if active {
+                            Capsule().fill(Theme.fillTranslucent.opacity(0.12))
+                                .overlay(Capsule().stroke(Theme.fillTranslucent.opacity(0.10), lineWidth: 1))
+                        }
                     }
                     .contentShape(Capsule())
-                    .onTapGesture { withAnimation(.easeInOut(duration: 0.18)) { selection.wrappedValue = m } }
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(3)
         .glassFloat(Capsule())
-        .frame(width: width)
+        .frame(width: 218)
     }
 
     // MARK: - What's new
@@ -218,16 +247,61 @@ struct PopoverView: View {
         }
     }
 
+    @ViewBuilder
+    private var workspaceContent: some View {
+        switch workspaceTab {
+        case .rewrite:
+            threadView.safeAreaInset(edge: .bottom, spacing: 0) { composer }
+        case .clipboard:
+            clipboardPanel
+        }
+    }
+
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "text.bubble").font(.system(size: 26)).foregroundStyle(Theme.textSecondary)
-            Text(settings.mode == .writing
-                 ? "Paste, type, or dictate the text you want to rework — then pick how to rewrite it."
-                 : "Paste a rough prompt — then pick how to improve it.")
+            Text("Paste, type, or dictate text to rework. You can also ask Rewrite to draft something new.")
                 .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity).padding(.top, 40).padding(.horizontal, 18)
+    }
+
+    /// Clipboard is deliberately a real destination now, not a hidden future
+    /// feature. The capture/store engine is a separate privacy-sensitive phase,
+    /// so this shell makes the product structure testable without claiming to
+    /// retain any copied content yet.
+    private var clipboardPanel: some View {
+        VStack(spacing: 18) {
+            Spacer(minLength: 0)
+            ZStack {
+                Circle().fill(Theme.fillTranslucent.opacity(0.08)).frame(width: 64, height: 64)
+                Image(systemName: "clipboard")
+                    .font(.system(size: 27, weight: .medium))
+                    .foregroundStyle(Theme.textPrimary)
+            }
+            VStack(spacing: 7) {
+                Text("Clipboard history")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("Recent copies will appear here, ready to bring back into Rewrite.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                Image(systemName: "lock.fill").font(.system(size: 11, weight: .semibold))
+                Text("Designed to stay private on this Mac")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundStyle(Theme.textSecondary)
+            .padding(.horizontal, 14).padding(.vertical, 9)
+            .adaptiveGlass(Capsule())
+            Spacer(minLength: 24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 34)
     }
 
     @ViewBuilder
@@ -561,16 +635,16 @@ struct PopoverView: View {
     private var composerPlaceholder: String {
         if composerMode == .instruction { return "Describe how to rewrite…  (⌘↩)" }
         if let sel = selectedAction { return "Type, then send to \(sel.label.lowercased())…" }
-        return thread.isEmpty ? settings.mode.inputPlaceholder : "Add text or a reply…"
+        return thread.isEmpty ? "Rewrite or ask…" : "Add text or a reply…"
     }
 
     // MARK: - History panel
 
     private var historyPanel: some View {
-        let items = settings.history.filter { $0.mode == historyMode }
+        let items = settings.history
         return Group {
             if items.isEmpty {
-                Text("No \(historyMode.title.capitalized) rewrites yet.")
+                Text("No rewrites yet.")
                     .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -588,7 +662,11 @@ struct PopoverView: View {
         // header), so there's no solid band at the top — same as the chat.
         .safeAreaInset(edge: .top, spacing: 0) {
             HStack {
-                modeSegmented($historyMode, width: 200)
+                Text("Recent rewrites")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .glassFloat(Capsule())
                 Spacer(minLength: 6)
                 if !settings.history.isEmpty {
                     Button { settings.history = [] } label: {
@@ -602,7 +680,6 @@ struct PopoverView: View {
             }
             .padding(.horizontal, 16).padding(.vertical, 8)
         }
-        .onAppear { historyMode = settings.mode }
     }
 
     private func historyRow(_ item: HistoryItem) -> some View {
@@ -621,7 +698,8 @@ struct PopoverView: View {
     }
 
     private func openHistory(_ item: HistoryItem) {
-        settings.mode = item.mode   // open in the matching tab; computed thread targets it
+        settings.mode = .rewrite
+        workspaceTab = .rewrite
         newChat()
         thread.append(ChatTurn(role: .user, text: item.input))
         thread.append(ChatTurn(role: .assistant, text: item.output,
@@ -650,19 +728,17 @@ struct PopoverView: View {
             run(systemPrompt: RewriteAction.customSystemPrompt(t), label: "Custom: \(t)")
             return
         }
-        // Smart plain send (no explicit action): one decide-and-act pass. In Writing
-        // it polishes text or fulfills a request; in Prompt it optimizes a draft
-        // prompt or — when the input is really content/a request — just does it.
+        // Smart plain send (no explicit action): one decide-and-act pass that
+        // either lightly improves text or fulfills a writing request.
         if selectedAction == nil && settings.smartIntent {
             addUserTurn(t)
-            run(systemPrompt: "", label: settings.mode == .prompt ? "Optimize" : "Improve", smart: true)
+            run(systemPrompt: "", label: "Improve", smart: true)
             return
         }
-        // No explicit action picked → apply the mode's sensible default
-        // (Writing: fix grammar + light polish; Prompt: optimize) instead of
-        // sending raw text that never gets rewritten.
+        // No explicit action picked → apply a light, safe improvement instead
+        // of sending raw text that never gets rewritten.
         let sel = selectedAction ?? {
-            let d = settings.mode.defaultAction
+            let d = RewriteMode.rewrite.defaultAction
             return SelectedAction(id: d.id, systemPrompt: d.systemPrompt, label: d.label)
         }()
         addUserTurn(t)
@@ -688,16 +764,13 @@ struct PopoverView: View {
                      source: String? = nil, wrap: Bool = true, smart: Bool = false) {
         let src = (source ?? latestUserText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !src.isEmpty else { return }
-        let runMode = settings.mode   // tag history with the mode this rewrite belongs to
+        let runMode = RewriteMode.rewrite
         currentTask?.cancel()
         isLoading = true
 
         // Smart uses its own single prompt and never wraps (it may legitimately
-        // "answer" a request); the label is provisional until the tag resolves.
-        // Prompt mode gets a Smart that optimizes-or-fulfills; Writing polishes-or-fulfills.
-        let prompt = smart
-            ? (runMode == .prompt ? RewriteAction.promptSmartSystemPrompt : RewriteAction.smartSystemPrompt)
-            : systemPrompt
+        // fulfill a request); the label is provisional until the tag resolves.
+        let prompt = smart ? RewriteAction.smartSystemPrompt : systemPrompt
         let turn = ChatTurn(role: .assistant, text: "", actionLabel: label,
                             systemPrompt: prompt, isStreaming: true, sourceText: src,
                             fulfillsRequest: !wrap && !smart, isSmart: smart)

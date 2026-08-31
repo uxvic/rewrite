@@ -439,7 +439,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
                 TextReplacementService.restoreClipboard(originalClipboard)
                 await MainActor.run {
                     settings.addHistory(actionLabel: "\(action.label) (in place)",
-                                        input: selection, output: result, mode: .writing)
+                                        input: selection, output: result, mode: .rewrite)
                 }
             } catch {
                 TextReplacementService.restoreClipboard(originalClipboard)
