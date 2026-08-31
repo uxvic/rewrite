@@ -211,14 +211,16 @@ struct MainWindowView: View {
     }
 
     private var actionChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 7) {
-                chip("✦ Smart", active: engine.smartActive) { engine.toggleSmart() }
-                ForEach(engine.actions) { a in
-                    chip(a.label, active: engine.selectedActionID == a.id) { engine.selectAction(a.id) }
+        HStack(spacing: 7) {
+            chip("✦ Smart", active: engine.smartActive) { engine.toggleSmart() }
+            ForEach(engine.mode.quickActions) { action in
+                chip(action.label, active: engine.selectedActionID == action.id) {
+                    engine.selectAction(action.id)
                 }
             }
+            actionsMenu
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func chip(_ label: String, active: Bool, _ action: @escaping () -> Void) -> some View {
@@ -230,6 +232,50 @@ struct MainWindowView: View {
                 .background(active ? Theme.accent : Theme.fillTranslucent.opacity(0.08), in: Capsule())
         }
         .buttonStyle(.plain)
+    }
+
+    /// The main window shares the four direct choices from the floating surface,
+    /// while keeping every less-frequent transform in one native menu.
+    private var actionsMenu: some View {
+        Menu {
+            Section("Rewrite") {
+                ForEach(engine.mode.overflowRewriteActions) { action in
+                    actionMenuItem(action)
+                }
+            }
+            Section("Prompt tools") {
+                ForEach(engine.mode.promptToolActions) { action in
+                    actionMenuItem(action)
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text("Actions")
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .font(.system(size: 12.5, weight: .medium))
+            .foregroundStyle(overflowActionSelected ? Theme.accent : Theme.textPrimary)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(overflowActionSelected ? Theme.accent.opacity(0.15) : Theme.fillTranslucent.opacity(0.08), in: Capsule())
+            .overlay(Capsule().stroke(Theme.fillTranslucent.opacity(0.08), lineWidth: 1))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .disabled(engine.isLoading)
+        .opacity(engine.isLoading ? 0.6 : 1)
+        .accessibilityLabel("Actions")
+    }
+
+    private var overflowActionSelected: Bool {
+        engine.mode.overflowActions.contains { $0.id == engine.selectedActionID }
+    }
+
+    private func actionMenuItem(_ action: PresetAction) -> some View {
+        Button { engine.selectAction(action.id) } label: {
+            Label(action.label, systemImage: action.systemImage)
+        }
     }
 
     // MARK: - Actions
