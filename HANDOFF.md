@@ -85,3 +85,10 @@ Owner: CODEX
 - Files: `RewriteApp/PopoverView.swift`. The floating panel host, glass primitive, size, anchoring, thread layout, and Clipboard surface were not changed.
 - Verified with `./script/build_and_run.sh --verify`.
 - Next: mirror the compact action structure in the retained main app window, then inspect its accessibility tree and prepare the direct menu-bar visual checkpoint. No files are reserved for Claude. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `98c6bf5`
+
+- Mirrored the compact control hierarchy in `RewriteApp/MainWindowView.swift`: Smart, Improve, Paraphrase, Fix Grammar, and one native Actions menu for all remaining rewrite and prompt tools.
+- Verified with `./script/build_and_run.sh --verify` and macOS accessibility inspection. The running window exposes exactly those four direct buttons, and the Actions menu exposes Shorter, Longer, Professional, Casual, Friendly, plus all seven prompt tools.
+- This preserves the retained main app window while aligning its behavior with the floating surface. No custom-preset capability was removed from the main window because it was not previously implemented there.
+- Next: direct visual review of the floating status-item panel over a real desktop, then polish any geometry or glass issues discovered. No files are reserved for Claude. Owner remains CODEX.
