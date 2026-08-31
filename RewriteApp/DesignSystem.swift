@@ -176,6 +176,25 @@ struct AmbientBackground: View {
     }
 }
 
+/// The menu-bar surface must leave room for the system to sample its actual
+/// surroundings on current macOS. Its older-system fallback preserves the
+/// readable dark canvas used before Liquid Glass was available. Keep this
+/// separate from `AmbientBackground`: the retained main window intentionally
+/// keeps its current visual treatment until its later redesign.
+struct QuickSurfaceBackground: View {
+    var body: some View {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            Color.clear.ignoresSafeArea()
+        } else {
+            AmbientBackground()
+        }
+        #else
+        AmbientBackground()
+        #endif
+    }
+}
+
 /// A glass / vibrant text-field pill ("Ask Siri" style).
 struct CapsuleFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
@@ -199,6 +218,11 @@ extension View {
 
     /// Near-black ambient radial background.
     func ambientBackground() -> some View { background(AmbientBackground()) }
+
+    /// Wallpaper-aware background for the floating menu-bar workspace. On
+    /// macOS 26+ it deliberately avoids an opaque custom canvas behind native
+    /// glass; older systems retain the established readable fallback.
+    func quickSurfaceBackground() -> some View { background(QuickSurfaceBackground()) }
 
     /// Native Liquid Glass on macOS 26+, with the closest material fallback for
     /// the macOS 14–25 deployment range. The system surface supplies the edge,

@@ -48,22 +48,14 @@ struct MainWindowView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
-            // Writing / Prompt — the top-level mode switch lives in the side nav.
-            HStack(spacing: 0) {
-                ForEach(RewriteMode.allCases) { m in
-                    Button { switchMode(m) } label: {
-                        Text(m == .writing ? "Writing" : "Prompt")
-                            .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(engine.mode == m ? Theme.accentInk : Theme.textSecondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(engine.mode == m ? Theme.accent : Color.clear, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(4)
-            .background(Theme.fillTranslucent.opacity(0.06), in: Capsule())
+            // The full window stays visually unchanged for this pass, but its
+            // old Writing/Prompt toggle becomes one truthful unified label.
+            Text("Rewrite")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(Theme.accentInk)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background(Theme.accent, in: Capsule())
             .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 18)
 
             HStack {
@@ -245,16 +237,6 @@ struct MainWindowView: View {
     }
 
     // MARK: - Actions
-
-    /// Writing and Prompt are separate threads: switching the mode opens that
-    /// mode's most-recent conversation (starting a fresh one if there isn't any),
-    /// instead of relabeling the current thread.
-    private func switchMode(_ m: RewriteMode) {
-        guard m != engine.conversation.mode else { return }
-        let target = store.conversations.first(where: { $0.mode == m }) ?? store.create(mode: m)
-        engine.open(target)
-        selection = target.id
-    }
 
     private func newChat() {
         let c = store.create(mode: engine.conversation.mode)

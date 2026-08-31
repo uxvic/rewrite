@@ -108,7 +108,7 @@ struct PopoverView: View {
             }
         }
         .frame(width: 380, height: 668)
-        .ambientBackground()
+        .quickSurfaceBackground()
         .onAppear { autoFillFromClipboard(); injectWhatsNewIfNeeded() }
         // Host is dismissing a torn-off window while dictation is live — end it
         // cleanly so the mic is released.
@@ -128,30 +128,32 @@ struct PopoverView: View {
     /// Compact floating header: rewrite/history controls stay available while the
     /// two product destinations share one visual shell.
     private var specBar: some View {
-        HStack(spacing: 8) {
-            IconButton(systemName: "clock.arrow.circlepath", active: panel == .history, help: "History") {
-                panel = (panel == .history) ? .main : .history
-            }
-            Spacer(minLength: 6)
-            if panel == .main {
-                workspaceTabs
-            } else {
-                Text(panel == .settings ? "Settings" : "History")
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
-                    .padding(.horizontal, 16).padding(.vertical, 7)
-                    .glassFloat(Capsule())
-            }
-            Spacer(minLength: 6)
-            // Settings now lives in the menu-bar menu; this top-right control is a
-            // Close (✕) that dismisses the window — except inside Settings, where
-            // it's a Back chevron returning to the chat.
-            IconButton(systemName: panel == .settings ? "chevron.left" : "xmark",
-                       active: panel == .settings,
-                       help: panel == .settings ? "Back" : "Close") {
-                if panel == .settings {
-                    panel = .main
+        GlassGroup {
+            HStack(spacing: 8) {
+                IconButton(systemName: "clock.arrow.circlepath", active: panel == .history, help: "History") {
+                    panel = (panel == .history) ? .main : .history
+                }
+                Spacer(minLength: 6)
+                if panel == .main {
+                    workspaceTabs
                 } else {
-                    NotificationCenter.default.post(name: .rewriteCloseWindow, object: nil)
+                    Text(panel == .settings ? "Settings" : "History")
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                        .padding(.horizontal, 16).padding(.vertical, 7)
+                        .glassFloat(Capsule())
+                }
+                Spacer(minLength: 6)
+                // Settings now lives in the menu-bar menu; this top-right control is a
+                // Close (✕) that dismisses the window — except inside Settings, where
+                // it's a Back chevron returning to the chat.
+                IconButton(systemName: panel == .settings ? "chevron.left" : "xmark",
+                           active: panel == .settings,
+                           help: panel == .settings ? "Back" : "Close") {
+                    if panel == .settings {
+                        panel = .main
+                    } else {
+                        NotificationCenter.default.post(name: .rewriteCloseWindow, object: nil)
+                    }
                 }
             }
         }
@@ -613,18 +615,20 @@ struct PopoverView: View {
     // MARK: - Composer (Siri bottom bar: + · glass field · mic/send)
 
     private var composer: some View {
-        VStack(spacing: 8) {
-            if showSelectPrompt && !draftIsEmpty { selectPrompt }
-            HStack(alignment: .bottom, spacing: 8) {
-                IconButton(systemName: "plus", size: 34,
-                           disabled: thread.isEmpty && draft.isEmpty && selectedAction == nil && composerMode == .text,
-                           help: "New chat") {
-                    newChat()
+        GlassGroup {
+            VStack(spacing: 8) {
+                if showSelectPrompt && !draftIsEmpty { selectPrompt }
+                HStack(alignment: .bottom, spacing: 8) {
+                    IconButton(systemName: "plus", size: 34,
+                               disabled: thread.isEmpty && draft.isEmpty && selectedAction == nil && composerMode == .text,
+                               help: "New chat") {
+                        newChat()
+                    }
+                    composerField
+                    IconButton(systemName: "mic.fill", size: 34, help: "Dictate") { enterVoiceMode() }
                 }
-                composerField
-                IconButton(systemName: "mic.fill", size: 34, help: "Dictate") { enterVoiceMode() }
+                actionBar
             }
-            actionBar
         }
         .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 10)
     }
