@@ -9,27 +9,31 @@ struct PresetAction: Identifiable, Equatable {
     let systemPrompt: String
 }
 
-/// Top-level mode that swaps the available actions + input hints.
-enum RewriteMode: String, CaseIterable, Identifiable, Codable {
+/// The product now has one unified Rewrite flow. `writing` and `prompt` remain
+/// only as legacy persisted values so older history/conversations decode safely.
+enum RewriteMode: String, Identifiable, Codable {
+    case rewrite
+    @available(*, deprecated, message: "Legacy persisted value; use rewrite.")
     case writing
+    @available(*, deprecated, message: "Legacy persisted value; use rewrite.")
     case prompt
 
+    static var allCases: [RewriteMode] { [.rewrite] }
     var id: String { rawValue }
-    var title: String { self == .writing ? "WRITING" : "PROMPT" }
+    var canonical: RewriteMode { .rewrite }
+    var title: String { "REWRITE" }
 
-    var inputPlaceholder: String {
-        self == .writing ? "Type, paste or dictate…" : "Paste a rough prompt…"
-    }
-    var customHint: String {
-        self == .writing ? "Custom instruction…" : "Custom prompt instruction…"
-    }
+    var inputPlaceholder: String { "Rewrite or ask…" }
+    var customHint: String { "Describe how to transform it…" }
 
     var actions: [PresetAction] {
         switch self {
-        case .writing:
+        case .rewrite:
             return RewriteAction.allCases.map {
                 PresetAction(id: $0.rawValue, label: $0.label, systemImage: $0.systemImage, systemPrompt: $0.systemPrompt)
-            }
+            } + [Self.promptActions[0]]
+        case .writing:
+            return RewriteMode.rewrite.actions
         case .prompt:
             return Self.promptActions
         }
@@ -39,12 +43,14 @@ enum RewriteMode: String, CaseIterable, Identifiable, Codable {
     /// Writing: a light polish (fix grammar + improve clarity). Prompt: Optimize.
     var defaultAction: PresetAction {
         switch self {
-        case .writing:
+        case .rewrite:
             return PresetAction(
                 id: "auto", label: "Improve", systemImage: "sparkles",
                 systemPrompt: RewriteAction.customSystemPrompt(
                     "Fix any grammar, spelling and punctuation mistakes and lightly improve clarity and flow, "
                     + "without changing the meaning, tone, or language."))
+        case .writing:
+            return RewriteMode.rewrite.defaultAction
         case .prompt:
             return Self.promptActions[0]   // "Optimize"
         }

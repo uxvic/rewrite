@@ -179,7 +179,7 @@ struct MainWindowView: View {
             Menu("Retry") {
                 Button("Try again") { engine.retryAgain(turn) }
                 Divider()
-                ForEach(RewriteMode.writing.actions) { a in
+                ForEach(RewriteMode.rewrite.actions) { a in
                     Button(a.label) { engine.retryAs(a, turn) }
                 }
             }

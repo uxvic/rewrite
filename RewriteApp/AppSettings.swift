@@ -31,11 +31,11 @@ struct HistoryItem: Codable, Identifiable {
     let actionLabel: String
     let input: String
     let output: String
-    var mode: RewriteMode = .writing
+    var mode: RewriteMode = .rewrite
 
     private enum CodingKeys: String, CodingKey { case id, actionLabel, input, output, mode }
 
-    init(id: String, actionLabel: String, input: String, output: String, mode: RewriteMode = .writing) {
+    init(id: String, actionLabel: String, input: String, output: String, mode: RewriteMode = .rewrite) {
         self.id = id; self.actionLabel = actionLabel; self.input = input; self.output = output; self.mode = mode
     }
 
@@ -46,7 +46,7 @@ struct HistoryItem: Codable, Identifiable {
         actionLabel = try c.decode(String.self, forKey: .actionLabel)
         input = try c.decode(String.self, forKey: .input)
         output = try c.decode(String.self, forKey: .output)
-        mode = try c.decodeIfPresent(RewriteMode.self, forKey: .mode) ?? .writing
+        mode = (try c.decodeIfPresent(RewriteMode.self, forKey: .mode))?.canonical ?? .rewrite
     }
 }
 
@@ -188,7 +188,7 @@ final class AppSettings: ObservableObject {
             .flatMap(RewriteAction.init(rawValue:)) ?? .paraphrase
         launchAtLogin = LoginItem.isEnabled
         recordingSounds = defaults.object(forKey: "recordingSounds") == nil ? true : defaults.bool(forKey: "recordingSounds")
-        mode = defaults.string(forKey: "mode").flatMap(RewriteMode.init(rawValue:)) ?? .writing
+        mode = defaults.string(forKey: "mode").flatMap(RewriteMode.init(rawValue:))?.canonical ?? .rewrite
         autoFillClipboard = defaults.object(forKey: "autoFillClipboard") == nil ? true : defaults.bool(forKey: "autoFillClipboard")
         autoCopyResult = defaults.bool(forKey: "autoCopyResult")
         smartIntent = defaults.object(forKey: "smartIntent") == nil ? true : defaults.bool(forKey: "smartIntent")

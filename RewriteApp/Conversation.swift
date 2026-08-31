@@ -12,7 +12,7 @@ struct Conversation: Identifiable, Codable, Equatable {
     var createdAt: Date
     var updatedAt: Date
 
-    init(id: UUID = UUID(), title: String = "New chat", mode: RewriteMode = .writing,
+    init(id: UUID = UUID(), title: String = "New chat", mode: RewriteMode = .rewrite,
          turns: [ChatTurn] = [], createdAt: Date = Date(), updatedAt: Date = Date()) {
         self.id = id
         self.title = title
@@ -61,7 +61,7 @@ final class ConversationStore: ObservableObject {
 
     /// Creates a new empty conversation at the top and returns it.
     @discardableResult
-    func create(mode: RewriteMode = .writing) -> Conversation {
+    func create(mode: RewriteMode = .rewrite) -> Conversation {
         let convo = Conversation(mode: mode)
         conversations.insert(convo, at: 0)
         persist()
