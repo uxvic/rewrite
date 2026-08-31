@@ -24,8 +24,9 @@ extension NSColor {
     }
 }
 
-/// "Apple Intelligence" design tokens — soft, near-black surfaces, a muted
-/// lavender accent, translucent fills. Dark is the showcase; light is supported.
+/// Rewrite's adaptive palette. The neutral canvas stays intentionally quiet so
+/// system material can pick up the wallpaper and content behind it, rather than
+/// reading as a stack of opaque dark cards.
 enum Theme {
     static let bg            = Color(nsColor: .dynamic(light: "#F2F2F7", dark: "#0B0B0F"))
     /// Lighter top stop for the ambient radial-gradient background.
@@ -164,7 +165,9 @@ struct IconButton: View {
     }
 }
 
-/// Near-black ambient background with a subtle radial lift toward the top.
+/// A neutral, adaptive canvas for the app's content. It is deliberately not used
+/// behind every floating element: real glass needs content and wallpaper colour
+/// to remain visible through the material.
 struct AmbientBackground: View {
     var body: some View {
         RadialGradient(gradient: Gradient(colors: [Theme.bgGradientTop, Theme.bg]),
@@ -197,11 +200,43 @@ extension View {
     /// Near-black ambient radial background.
     func ambientBackground() -> some View { background(AmbientBackground()) }
 
-    /// Big Sur–style frosted glass for a floating control: an opaque-ish material
-    /// fill in `shape`, a hairline edge, and a soft drop shadow so it reads as
-    /// floating above the chat scrolling behind it.
+    /// Native Liquid Glass on macOS 26+, with the closest material fallback for
+    /// the macOS 14–25 deployment range. The system surface supplies the edge,
+    /// vibrancy, and background-aware refraction on current macOS; the fallback
+    /// keeps older installations readable without pretending it is the same effect.
+    @ViewBuilder
+    func adaptiveGlass<S: Shape>(_ shape: S, interactive: Bool = false,
+                                 stroke: Double = 0.10, shadow: Double = 0.20) -> some View {
+        if #available(macOS 26.0, *) {
+            if interactive {
+                glassEffect(.regular.interactive(), in: shape)
+            } else {
+                glassEffect(.regular, in: shape)
+            }
+        } else {
+            background(shape.fill(.regularMaterial).shadow(color: Color.black.opacity(shadow), radius: 6, y: 2))
+                .overlay(shape.stroke(Theme.fillTranslucent.opacity(stroke), lineWidth: 1))
+        }
+    }
+
+    /// Compatibility name for existing floating controls. New feature code should
+    /// use `adaptiveGlass` directly so interaction intent is explicit.
     func glassFloat<S: Shape>(_ shape: S, stroke: Double = 0.10, shadow: Double = 0.20) -> some View {
-        background(shape.fill(.regularMaterial).shadow(color: Color.black.opacity(shadow), radius: 6, y: 2))
-            .overlay(shape.stroke(Theme.fillTranslucent.opacity(stroke), lineWidth: 1))
+        adaptiveGlass(shape, stroke: stroke, shadow: shadow)
+    }
+}
+
+/// Keeps neighbouring custom glass controls in one material group on macOS 26+.
+/// Use this around a composer and its adjacent action buttons; separate groups
+/// cannot refract one another consistently.
+struct GlassGroup<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer { content() }
+        } else {
+            content()
+        }
     }
 }
