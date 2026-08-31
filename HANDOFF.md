@@ -77,3 +77,11 @@ Owner: CODEX
 - This is a data-only refactor used to keep the forthcoming popover and main-window controls in sync. It does not alter the panel host, glass treatment, or provider behaviour on its own.
 - Verified with `./script/build_and_run.sh --verify`.
 - Next: apply the four-action row plus native overflow menu to the floating Rewrite composer. No files are reserved for Claude. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `b04b586`
+
+- Replaced the floating composer’s horizontally scrolling action strip with four direct choices: Smart, Improve, Paraphrase, and Fix Grammar.
+- Added an accented-state native `Actions` menu in the utility row. It groups remaining rewrite transforms, prompt tools, saved custom presets, and custom instructions. All original capabilities remain reachable, and duplicate ⌘0 shortcuts were removed in favor of distinct ⌘1–⌘9 mappings where available.
+- Files: `RewriteApp/PopoverView.swift`. The floating panel host, glass primitive, size, anchoring, thread layout, and Clipboard surface were not changed.
+- Verified with `./script/build_and_run.sh --verify`.
+- Next: mirror the compact action structure in the retained main app window, then inspect its accessibility tree and prepare the direct menu-bar visual checkpoint. No files are reserved for Claude. Owner remains CODEX.
