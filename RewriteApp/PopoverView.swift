@@ -59,6 +59,7 @@ struct PopoverView: View {
     @State private var voiceMode = false
     @State private var fromClipboard = false
     @State private var lastClipboardCount = -1
+    @State private var threadHeight: CGFloat = 0
 
     private enum Panel { case main, settings, history }
     private enum WorkspaceTab: CaseIterable {
@@ -98,18 +99,18 @@ struct PopoverView: View {
                 Group {
                     switch panel {
                     case .main:
-                        workspaceContent
-                    case .settings: SettingsView()
-                    case .history:  historyPanel
+                        floatingWorkspace
+                    case .settings:
+                        floatingPanelCard(title: "Settings") { SettingsView() }
+                    case .history:
+                        floatingPanelCard(title: "History") { historyPanel }
                     }
                 }
-                .safeAreaInset(edge: .top, spacing: 0) { specBar }
-                // Esc dismisses a torn-off floating window (no-op while docked).
                 .onExitCommand { NotificationCenter.default.post(name: .rewriteCloseWindow, object: nil) }
             }
         }
-        .frame(width: 380, height: 668)
-        .quickSurfaceBackground()
+        .frame(width: 424, height: 700)
+        .background(Color.clear)
         .onAppear { autoFillFromClipboard(); injectWhatsNewIfNeeded() }
         .onReceive(NotificationCenter.default.publisher(for: .rewritePanelWillShow)) { _ in
             autoFillFromClipboard()
@@ -126,6 +127,60 @@ struct PopoverView: View {
             if voiceMode { cancelVoice() }
             panel = .settings
         }
+    }
+
+    // MARK: - Floating workspace
+
+    /// The reference is a composition of detached surfaces, not a single app
+    /// window. The transparent host provides only breathing room for shadows; the
+    /// switcher, conversation, composer, and clipboard each draw their own glass.
+    private var floatingWorkspace: some View {
+        return GlassGroup {
+            VStack(spacing: 13) {
+                workspaceTabs
+                switch workspaceTab {
+                case .rewrite:
+                    threadView
+                    composer
+                case .clipboard:
+                    clipboardPanel
+                }
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 10)
+        .padding(.bottom, 22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// Dense utilities remain one readable card, while the everyday Rewrite and
+    /// Clipboard surfaces remain detached and lightweight.
+    private func floatingPanelCard<Content: View>(title: String,
+                                                   @ViewBuilder content: () -> Content) -> some View {
+        let panelContent = content()
+        return GlassGroup {
+            VStack(spacing: 0) {
+                HStack {
+                    IconButton(systemName: "chevron.left", size: 30, help: "Back") { panel = .main }
+                    Spacer()
+                    Text(title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Spacer()
+                    IconButton(systemName: "xmark", size: 30, help: "Close") {
+                        NotificationCenter.default.post(name: .rewriteCloseWindow, object: nil)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                panelContent
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .adaptiveGlass(RoundedRectangle(cornerRadius: 28, style: .continuous), interactive: true)
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 10)
+        .padding(.bottom, 22)
     }
 
     // MARK: - Header
@@ -237,8 +292,8 @@ struct PopoverView: View {
 
     private var threadView: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 12) {
                     if thread.isEmpty {
                         emptyState
                     } else {
@@ -246,13 +301,31 @@ struct PopoverView: View {
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }
-                .padding(16)
-                .background(OverlayScrollers())
+                .padding(.horizontal, 2)
+                .background(GeometryReader { geometry in
+                    Color.clear.preference(key: ThreadHeightKey.self, value: geometry.size.height)
+                })
             }
-            .frame(maxHeight: .infinity)
+            .onPreferenceChange(ThreadHeightKey.self) { threadHeight = $0 }
+            .frame(height: min(max(threadHeight, thread.isEmpty ? 112 : 0), Self.threadCap))
+            .mask {
+                if threadHeight > Self.threadCap {
+                    LinearGradient(stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .black, location: 0.12),
+                        .init(color: .black, location: 1)
+                    ], startPoint: .top, endPoint: .bottom)
+                    .padding(.horizontal, -80)
+                    .padding(.bottom, -80)
+                } else {
+                    Rectangle().padding(-80)
+                }
+            }
             .onChange(of: thread) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
         }
     }
+
+    private static let threadCap: CGFloat = 390
 
     @ViewBuilder
     private var workspaceContent: some View {
@@ -265,20 +338,29 @@ struct PopoverView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "text.bubble").font(.system(size: 26)).foregroundStyle(Theme.textSecondary)
-            Text("Paste, type, or dictate text to rework. You can also ask Rewrite to draft something new.")
-                .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
-                .multilineTextAlignment(.center)
+        HStack {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Rewrite anything")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("Paste, type, or dictate text to rework. You can also ask Rewrite to draft something new.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 28)
         }
-        .frame(maxWidth: .infinity).padding(.top, 40).padding(.horizontal, 18)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .adaptiveGlass(RoundedRectangle(cornerRadius: 25, style: .continuous))
     }
 
     private var clipboardPanel: some View {
-        Group {
+        VStack(spacing: 0) {
             if clipboard.items.isEmpty {
                 clipboardEmptyState
             } else {
+                clipboardHistoryHeader
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(clipboard.items) { item in
@@ -288,15 +370,14 @@ struct PopoverView: View {
                     .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16)
                     .background(OverlayScrollers())
                 }
-                .safeAreaInset(edge: .top, spacing: 0) { clipboardHistoryHeader }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: 430)
+        .adaptiveGlass(RoundedRectangle(cornerRadius: 28, style: .continuous), interactive: true)
     }
 
     private var clipboardEmptyState: some View {
         VStack(spacing: 18) {
-            Spacer(minLength: 0)
             ZStack {
                 Circle().fill(Theme.fillTranslucent.opacity(0.08)).frame(width: 64, height: 64)
                 Image(systemName: settings.clipboardHistoryEnabled ? "clipboard" : "clipboard.slash")
@@ -322,11 +403,10 @@ struct PopoverView: View {
             }
             .foregroundStyle(Theme.textSecondary)
             .padding(.horizontal, 14).padding(.vertical, 9)
-            .adaptiveGlass(Capsule())
-            Spacer(minLength: 24)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 34)
+        .padding(.vertical, 32)
     }
 
     private var clipboardHistoryHeader: some View {
@@ -345,7 +425,7 @@ struct PopoverView: View {
                 .buttonStyle(.plain)
                 .help("Clear clipboard history")
         }
-        .padding(.horizontal, 16).padding(.vertical, 8)
+        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
     }
 
     private func clipboardRow(_ item: ClipboardItem) -> some View {
@@ -425,7 +505,7 @@ struct PopoverView: View {
                 .font(.system(size: 13.5)).foregroundStyle(Theme.textPrimary)
                 .textSelection(.enabled)
                 .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous).fill(Theme.panel))
+                .adaptiveGlass(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous))
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.leading, 36)
@@ -442,14 +522,14 @@ struct PopoverView: View {
             if turn.isStreaming && turn.text.isEmpty {
                 TypingDots()
                     .padding(.horizontal, 14).padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous).fill(Theme.surface))
+                    .adaptiveGlass(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous))
             } else {
                 bodyText(turn)
                     .font(.system(size: 13.5))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
                     .padding(.horizontal, 14).padding(.vertical, 11)
-                    .background(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous).fill(Theme.surface))
+                    .adaptiveGlass(RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous))
                     .overlay {
                         if turn.isStreaming {
                             RoundedRectangle(cornerRadius: Metric.bubbleRadius, style: .continuous)
@@ -730,7 +810,8 @@ struct PopoverView: View {
                 actionBar
             }
         }
-        .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 10)
+        .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 11)
+        .adaptiveGlass(RoundedRectangle(cornerRadius: 27, style: .continuous), interactive: true)
     }
 
     /// Nudge shown above the input when you try to send without picking an action.
@@ -777,8 +858,8 @@ struct PopoverView: View {
         }
         .padding(.horizontal, 5).padding(.vertical, 5)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 21, style: .continuous).fill(.regularMaterial)
-            .shadow(color: Color.black.opacity(0.20), radius: 6, y: 2))
+        .background(RoundedRectangle(cornerRadius: 21, style: .continuous)
+            .fill(Theme.fillTranslucent.opacity(0.08)))
         .overlay(RoundedRectangle(cornerRadius: 21, style: .continuous).stroke(composerBorder, lineWidth: 1))
         // Enter sends; Shift+Enter inserts a newline. A window-local key monitor
         // (not SwiftUI's .onKeyPress, which leaks Return inside an NSPopover and
@@ -1132,6 +1213,14 @@ struct PopoverView: View {
     private func setClipboard(_ s: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
+    }
+}
+
+private struct ThreadHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
