@@ -187,3 +187,9 @@ Owner set to CODEX. Nothing is reserved by Claude; all files are free.
 - Restored Claude's transparent, borderless floating-panel host in `RewriteApp/AppDelegate.swift`. The quick surface is again anchored beneath the menu-bar icon without `NSPopover`'s rectangular chrome, with outside-click dismissal and dictation persistence retained.
 - Kept the current unified Rewrite flow and automatic Clipboard History intact. Added the panel-show lifecycle signal and explicit dictation-end notification in `RewriteApp/PopoverView.swift`.
 - `./script/build_and_run.sh --verify` and `git diff --check` passed. Next: replace the current full-height internal layout with the supplied reference's detached capsule-and-panel composition. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `2796572`
+
+- Rebuilt the active quick surface in `RewriteApp/PopoverView.swift` as detached glass objects: compact Rewrite/Clipboard switcher, bounded floating conversation or Clipboard panel, and a separate composer card. The transparent host now supplies only shadow clearance, eliminating the previous full-height grey workspace.
+- Updated guidance, chat bubbles, Clipboard History, and the composer to use the same adaptive glass treatment. Conversation height grows to content then caps and fades, rather than filling the invisible panel.
+- `./script/build_and_run.sh --verify` and `git diff --check` passed. Next: manual visual comparison against Victor's references, then tune component geometry and visual weight from that feedback. Owner remains CODEX.
