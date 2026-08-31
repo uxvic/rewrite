@@ -12,7 +12,9 @@ Owner: CODEX
 - [x] Establish adaptive Liquid Glass primitives with a macOS 14–25 fallback.
 - [ ] Split the menu-bar UI into focused components without changing behaviour.
 - [x] Collapse Writing and Prompt into one Rewrite flow with a safe local-data migration.
+- [x] Establish Rewrite and Clipboard as separate quick-surface destinations.
 - [ ] Redesign the quick menu-bar Rewrite surface.
+- [ ] Build private local clipboard capture, storage, retention, and "send to Rewrite" behaviour.
 - [ ] Redesign the retained main Rewrite window.
 - [ ] Verify build, native interactions, accessibility, and motion; add targeted tests and repair CI triggers.
 
@@ -142,3 +144,11 @@ Owner set to CODEX. Nothing is reserved by Claude; all files are free.
 - Fixed the unified-mode data migration in `ConversationStore.load()`; legacy conversations now self-heal to the unified mode and are persisted once. Smart now consistently uses the unified Rewrite behaviour.
 - Added compiler guards around Liquid Glass symbols and repaired macOS CI branch triggers for `main` and `rewrite`.
 - Build passed. Remaining known UI work: remove legacy segmented controls and extract/redesign the quick surface. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `89fbfc5`
+
+- Replaced the leftover one-option Writing/Prompt control in `RewriteApp/PopoverView.swift` with an adaptive-glass `Rewrite` / `Clipboard` destination switcher.
+- Added the Clipboard empty state as a genuine separate surface, including the private-on-this-Mac product framing. It deliberately does **not** monitor or persist clipboard contents yet; that requires a separate, privacy-sensitive capture and retention design.
+- Removed residual prompt-mode branches from the quick surface and corrected the in-place rewrite history tag in `RewriteApp/AppDelegate.swift` to the unified Rewrite mode.
+- Build passed with `xcodebuild -project RewriteApp.xcodeproj -scheme Rewrite -configuration Debug CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -derivedDataPath work/DerivedData build`.
+- Next: tighten the Rewrite composer into the four direct actions from the reference direction, move the remaining transforms behind a compact Actions menu, then continue the glass and layout pass. Owner remains CODEX.
