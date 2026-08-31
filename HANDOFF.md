@@ -166,3 +166,10 @@ Owner set to CODEX. Nothing is reserved by Claude; all files are free.
 - The script targets this checkout's `work/DerivedData/…/Rewrite.app` and only terminates that exact Debug executable before rebuilding, avoiding separately installed Rewrite apps.
 - Ran `./script/build_and_run.sh --verify`: the Debug app built and launched successfully. The retained main window intentionally remains visually untouched; the quick surface is the active redesign target.
 - Next: continue tuning the quick-surface hierarchy and motion, then start the separate local-only clipboard data layer once its expected capture and retention behaviour is specified. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `dc952ff`
+
+- Added a quick-surface-only background rule in `RewriteApp/DesignSystem.swift`: macOS 26+ now leaves the canvas transparent behind native Liquid Glass so it can respond to the wallpaper; macOS 14–25 retains the readable material fallback. The retained main-window canvas was not changed.
+- Grouped the quick surface's nearby native-glass controls in `RewriteApp/PopoverView.swift` so their refraction reads as one system composition rather than unrelated translucent widgets.
+- Replaced the main window's stale, misleading Writing/Prompt one-item toggle with a single `Rewrite` label in `RewriteApp/MainWindowView.swift`. This is a necessary shared-mode correction, not the deferred main-window redesign.
+- `./script/build_and_run.sh --verify` passed, with no remaining deprecated mode warnings. Next: manual visual review of the quick surface against the references, then the local-only clipboard capture layer. Owner remains CODEX.
