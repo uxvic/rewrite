@@ -152,3 +152,10 @@ Owner set to CODEX. Nothing is reserved by Claude; all files are free.
 - Removed residual prompt-mode branches from the quick surface and corrected the in-place rewrite history tag in `RewriteApp/AppDelegate.swift` to the unified Rewrite mode.
 - Build passed with `xcodebuild -project RewriteApp.xcodeproj -scheme Rewrite -configuration Debug CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -derivedDataPath work/DerivedData build`.
 - Next: tighten the Rewrite composer into the four direct actions from the reference direction, move the remaining transforms behind a compact Actions menu, then continue the glass and layout pass. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `c5e508c`
+
+- Reworked the Rewrite action rail in `RewriteApp/PopoverView.swift`: Smart, Improve, Paraphrase, and Fix Grammar are the only immediate choices.
+- Moved the less-frequent transforms, prompt optimization, saved presets, and custom instruction into a compact native `Actions` menu. Existing keyboard shortcuts remain assigned to the menu items.
+- Applied the adaptive glass primitive to unselected action controls, so macOS 26+ gets native refraction while macOS 14–25 keeps the material fallback.
+- Build passed with the standard unsigned `xcodebuild` command. Next: visually inspect the running macOS surface and tune hierarchy, spacing, and glass against the supplied reference. Owner remains CODEX.
