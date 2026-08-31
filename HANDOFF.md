@@ -8,7 +8,8 @@ Owner: CODEX
 
 - [x] Preserve the earlier Codex rewrite implementation on a recoverable remote branch.
 - [x] Adopt Claude's floating-panel implementation as the `rewrite` baseline.
-- [ ] Verify the adopted floating quick surface and its retained main window build cleanly.
+- [x] Verify the adopted app and retained main window build and launch cleanly.
+- [ ] Verify the floating quick surface directly under the menu-bar icon.
 - [ ] Reintroduce one unified Rewrite flow without compromising the floating composition.
 - [ ] Integrate private, local Clipboard History as a separate destination.
 - [ ] Tune the visual hierarchy against the supplied Apple Liquid Glass references.
@@ -36,4 +37,11 @@ Owner: CODEX
 - Restored the project-local Debug build/run entrypoint from the preserved branch without changing application behaviour.
 - Files: `script/build_and_run.sh`, `.codex/environments/environment.toml`.
 - Next: run the adopted Claude baseline through an unsigned Debug build and verify its output before integrating any features from the preserved implementation.
+- No files are reserved for Claude. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — verification checkpoint
+
+- `./script/build_and_run.sh --verify` completed successfully against the adopted baseline. The unsigned Debug bundle built and launched from `work/DerivedData`.
+- The retained main window was inspected through macOS accessibility output. The menu-bar-only floating panel is not exposed by that inspector, so its exact open/close geometry still needs direct status-item verification before any visual claims.
+- Next: manually port the unified Rewrite model without importing old quick-surface layout code, then add Clipboard History data capture as a separate bounded feature.
 - No files are reserved for Claude. Owner remains CODEX.
