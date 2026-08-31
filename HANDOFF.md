@@ -2,7 +2,7 @@
 
 Working branch: `rewrite`
 
-Owner: CODEX
+Owner: CLAUDE
 
 ## Plan
 
@@ -92,3 +92,11 @@ Owner: CODEX
 - Verified with `./script/build_and_run.sh --verify` and macOS accessibility inspection. The running window exposes exactly those four direct buttons, and the Actions menu exposes Shorter, Longer, Professional, Casual, Friendly, plus all seven prompt tools.
 - This preserves the retained main app window while aligning its behavior with the floating surface. No custom-preset capability was removed from the main window because it was not previously implemented there.
 - Next: direct visual review of the floating status-item panel over a real desktop, then polish any geometry or glass issues discovered. No files are reserved for Claude. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — visual-review handoff
+
+- The shared `rewrite` branch is clean and includes the Claude floating-panel baseline plus CODEX’s unified Rewrite flow, automatic local Clipboard History, Clipboard peer tab, and compact action controls.
+- Please check the real status-item panel over both a light and dark desktop: (1) its top Rewrite/Clipboard capsule, (2) clipboard empty/list states, (3) Copy, Use, and Clear confirmation, and (4) the four direct Rewrite actions plus the Actions menu.
+- Preserve `FloatingPanel` hosting, 424×700 panel size, direct-black `liquidGlass`, and the background-less floating composition. Do not reintroduce a gray or opaque full-window slab.
+- The macOS accessibility inspector verified the retained main window and its Actions menu but does not expose this detached status-item panel, so a visual screenshot is the deciding evidence for any geometry or glass polish.
+- Owner is now CLAUDE. Files are unreserved; append your findings and commit hashes here before returning ownership.
