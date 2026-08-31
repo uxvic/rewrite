@@ -11,7 +11,8 @@ Owner: CODEX
 - [x] Verify the adopted app and retained main window build and launch cleanly.
 - [ ] Verify the floating quick surface directly under the menu-bar icon.
 - [x] Reintroduce one unified Rewrite flow without compromising the floating composition.
-- [ ] Integrate private, local Clipboard History as a separate destination.
+- [x] Add automatic, private local Clipboard History capture and controls.
+- [ ] Integrate Clipboard History as a separate destination in the floating surface.
 - [ ] Tune the visual hierarchy against the supplied Apple Liquid Glass references.
 - [ ] Add focused accessibility and interaction verification, then prepare a review checkpoint.
 
@@ -53,3 +54,11 @@ Owner: CODEX
 - Existing Writing and Prompt chats remain independent saved conversations, but now appear in one Rewrite chat list. Prompt-engineering actions remain available in the unified action rail.
 - Verified with `./script/build_and_run.sh --verify`; the Debug app launched and the full window exposed one Rewrite flow through macOS accessibility inspection. Claude's `FloatingPanel`, `liquidGlass`, sizing, and anchoring were not changed.
 - Next: add the isolated local Clipboard History capture/store and its privacy-safe setting, without touching the floating quick-surface layout. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `0ec0790`
+
+- Added the first Clipboard History slice without changing Claude's floating composition: automatic capture begins when Rewrite launches and stores at most 100 normal text clips, each at most 10,000 characters, locally on this Mac.
+- Files: `RewriteApp/ClipboardStore.swift`, `AppDelegate.swift`, `AppSettings.swift`, `SettingsView.swift`, `PrivacyInfo.xcprivacy`, and `RewriteApp.xcodeproj/project.pbxproj`.
+- Concealed and transient pasteboard types are excluded; copied items are never sent to a provider unless a future explicit user action places one in the composer. Capture has an enabled-by-default Settings toggle and a Clear History control.
+- Verified with `./script/build_and_run.sh --verify`, `plutil -lint RewriteApp/PrivacyInfo.xcprivacy`, and macOS accessibility inspection of the Settings controls. I did not overwrite Victor's current clipboard to fabricate a capture test.
+- Next: design and build the Clipboard destination into the existing top floating-tab treatment, then compact the unified action rail without changing the panel host or glass primitives. Owner remains CODEX.
