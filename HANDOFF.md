@@ -10,7 +10,7 @@ Owner: CODEX
 - [x] Adopt Claude's floating-panel implementation as the `rewrite` baseline.
 - [x] Verify the adopted app and retained main window build and launch cleanly.
 - [ ] Verify the floating quick surface directly under the menu-bar icon.
-- [ ] Reintroduce one unified Rewrite flow without compromising the floating composition.
+- [x] Reintroduce one unified Rewrite flow without compromising the floating composition.
 - [ ] Integrate private, local Clipboard History as a separate destination.
 - [ ] Tune the visual hierarchy against the supplied Apple Liquid Glass references.
 - [ ] Add focused accessibility and interaction verification, then prepare a review checkpoint.
@@ -45,3 +45,11 @@ Owner: CODEX
 - The retained main window was inspected through macOS accessibility output. The menu-bar-only floating panel is not exposed by that inspector, so its exact open/close geometry still needs direct status-item verification before any visual claims.
 - Next: manually port the unified Rewrite model without importing old quick-surface layout code, then add Clipboard History data capture as a separate bounded feature.
 - No files are reserved for Claude. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `6896820`
+
+- Collapsed Writing and Prompt into one canonical Rewrite flow while retaining legacy values solely to decode and self-heal existing local data.
+- Files: `RewriteApp/RewriteMode.swift`, `AppSettings.swift`, `Conversation.swift`, `ChatEngine.swift`, `MainWindowView.swift`, `PopoverView.swift`, `AppDelegate.swift`, `SettingsView.swift`.
+- Existing Writing and Prompt chats remain independent saved conversations, but now appear in one Rewrite chat list. Prompt-engineering actions remain available in the unified action rail.
+- Verified with `./script/build_and_run.sh --verify`; the Debug app launched and the full window exposed one Rewrite flow through macOS accessibility inspection. Claude's `FloatingPanel`, `liquidGlass`, sizing, and anchoring were not changed.
+- Next: add the isolated local Clipboard History capture/store and its privacy-safe setting, without touching the floating quick-surface layout. Owner remains CODEX.
