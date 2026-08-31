@@ -122,15 +122,13 @@ match: a rounded **composer capsule** (placeholder + trailing mic) above a
 **rounded list panel** of sections with `⌘1..⌘N` right-aligned, both inside one
 `GlassEffectContainer` so they refract as one material.
 
-**Scope conflict for the human to settle.** Victor told Claude "we are removing
-the app UI — they should not be able to open it as a separate app (we might bring
-it back later)", but told Codex "leave main app window for now, don't remove it
-completely." Those differ on whether the window's entry points are disabled now.
-Nobody should touch `MainWindowView` until he picks. Deleting the files is ruled
-out either way.
+**Main window — settled by Victor: leave it as it is.** It stays reachable and
+untouched for now; it will be redesigned later with more features, to his plan.
+Treat `MainWindowView.swift` as out of scope except where a shared type forces a
+compile fix (e.g. the mislabelled mode pill in defect 3).
 
-**Suggested order** — 0: fix defects 1–5. 1: settle branch base + the window
-question. 2: `PopoverView` extraction (no behaviour change). 3: adaptive glass
+**Suggested order** — 0: fix defects 1–5. 1: settle branch base. 2:
+`PopoverView` extraction (no behaviour change). 3: adaptive glass
 primitives against the Siri frames. 4: section list with `⌘`-numbers. 5: clipboard
 history (capture → store → UI → "send clip to composer"), grounded in
 `uxvic/MightyPaste`, with transient/concealed pasteboard types excluded from
