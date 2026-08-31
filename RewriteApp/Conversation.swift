@@ -51,7 +51,17 @@ final class ConversationStore: ObservableObject {
         guard let data = try? Data(contentsOf: fileURL),
               let decoded = try? JSONDecoder().decode([Conversation].self, from: data)
         else { return }
-        conversations = decoded.sorted { $0.updatedAt > $1.updatedAt }
+        var migrated = false
+        conversations = decoded.map { conversation in
+            var canonical = conversation
+            if canonical.mode != canonical.mode.canonical {
+                canonical.mode = canonical.mode.canonical
+                migrated = true
+            }
+            return canonical
+        }
+        .sorted { $0.updatedAt > $1.updatedAt }
+        if migrated { persist() }
     }
 
     private func persist() {

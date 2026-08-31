@@ -207,6 +207,7 @@ extension View {
     @ViewBuilder
     func adaptiveGlass<S: Shape>(_ shape: S, interactive: Bool = false,
                                  stroke: Double = 0.10, shadow: Double = 0.20) -> some View {
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             if interactive {
                 glassEffect(.regular.interactive(), in: shape)
@@ -217,6 +218,10 @@ extension View {
             background(shape.fill(.regularMaterial).shadow(color: Color.black.opacity(shadow), radius: 6, y: 2))
                 .overlay(shape.stroke(Theme.fillTranslucent.opacity(stroke), lineWidth: 1))
         }
+        #else
+        background(shape.fill(.regularMaterial).shadow(color: Color.black.opacity(shadow), radius: 6, y: 2))
+            .overlay(shape.stroke(Theme.fillTranslucent.opacity(stroke), lineWidth: 1))
+        #endif
     }
 
     /// Compatibility name for existing floating controls. New feature code should
@@ -233,10 +238,14 @@ struct GlassGroup<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             GlassEffectContainer { content() }
         } else {
             content()
         }
+        #else
+        content()
+        #endif
     }
 }

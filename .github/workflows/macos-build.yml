@@ -7,7 +7,7 @@ name: macos-build
 
 on:
   push:
-    branches: [ "claude/kind-brahmagupta-nii3ih" ]
+    branches: [ "main", "rewrite" ]
     paths:
       - "RewriteApp/**"
       - "RewriteApp.xcodeproj/**"

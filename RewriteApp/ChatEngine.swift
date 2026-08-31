@@ -79,7 +79,7 @@ final class ChatEngine: ObservableObject {
         // polishes/fulfills; Prompt optimizes-or-fulfills.
         if selectedActionID == nil && settings.smartIntent {
             addUserTurn(t)
-            run(systemPrompt: "", label: conversation.mode == .prompt ? "Optimize" : "Improve", smart: true)
+            run(systemPrompt: "", label: "Improve", smart: true)
             return
         }
         let action = resolveAction()
@@ -118,9 +118,7 @@ final class ChatEngine: ObservableObject {
         currentTask?.cancel()
         isLoading = true
 
-        let prompt = smart
-            ? (conversation.mode == .prompt ? RewriteAction.promptSmartSystemPrompt : RewriteAction.smartSystemPrompt)
-            : systemPrompt
+        let prompt = smart ? RewriteAction.smartSystemPrompt : systemPrompt
         let turn = ChatTurn(role: .assistant, text: "", actionLabel: label,
                             systemPrompt: prompt, isStreaming: true, sourceText: src,
                             fulfillsRequest: !wrap && !smart, isSmart: smart)

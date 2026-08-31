@@ -135,3 +135,10 @@ history (capture → store → UI → "send clip to composer"), grounded in
 capture on day one. 6: accessibility, motion, tests, CI.
 
 Owner set to CODEX. Nothing is reserved by Claude; all files are free.
+
+### 2026-08-31 — CODEX
+
+- Cherry-picked the reviewed menu-bar regression fixes from `claude/kind-brahmagupta-nii3ih` as `1263783`, `e35c2c5`, `7ba2e05`, and `d71648b`. Rewrite now remains an accessory app, so the quick surface can appear over the current app and Space while the main window stays available.
+- Fixed the unified-mode data migration in `ConversationStore.load()`; legacy conversations now self-heal to the unified mode and are persisted once. Smart now consistently uses the unified Rewrite behaviour.
+- Added compiler guards around Liquid Glass symbols and repaired macOS CI branch triggers for `main` and `rewrite`.
+- Build passed. Remaining known UI work: remove legacy segmented controls and extract/redesign the quick surface. Owner remains CODEX.
