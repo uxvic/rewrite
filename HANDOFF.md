@@ -181,3 +181,9 @@ Owner set to CODEX. Nothing is reserved by Claude; all files are free.
 - Added the enabled-by-default `Clipboard history` setting in `RewriteApp/AppSettings.swift` and `RewriteApp/SettingsView.swift`; switching it off stops new capture. Debug builds persist the test history separately from installed Rewrite data.
 - Updated the app lifecycle, privacy description, and Xcode project file. `./script/build_and_run.sh --verify` and `git diff --check` passed.
 - Next: Victor's manual visual and interaction check of the quick surface against the supplied Siri references. Remaining engineering work is the component extraction, retained main-window redesign, and targeted interaction/accessibility/motion testing. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `93d7073`
+
+- Restored Claude's transparent, borderless floating-panel host in `RewriteApp/AppDelegate.swift`. The quick surface is again anchored beneath the menu-bar icon without `NSPopover`'s rectangular chrome, with outside-click dismissal and dictation persistence retained.
+- Kept the current unified Rewrite flow and automatic Clipboard History intact. Added the panel-show lifecycle signal and explicit dictation-end notification in `RewriteApp/PopoverView.swift`.
+- `./script/build_and_run.sh --verify` and `git diff --check` passed. Next: replace the current full-height internal layout with the supplied reference's detached capsule-and-panel composition. Owner remains CODEX.
