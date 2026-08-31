@@ -148,6 +148,11 @@ final class AppSettings: ObservableObject {
     @Published var autoFillClipboard: Bool {
         didSet { defaults.set(autoFillClipboard, forKey: "autoFillClipboard") }
     }
+    /// Clipboard History starts enabled, but remains an explicit local preference
+    /// so a user can stop all subsequent capture without losing other settings.
+    @Published var clipboardHistoryEnabled: Bool {
+        didSet { defaults.set(clipboardHistoryEnabled, forKey: "clipboardHistoryEnabled") }
+    }
     @Published var autoCopyResult: Bool {
         didSet { defaults.set(autoCopyResult, forKey: "autoCopyResult") }
     }
@@ -190,6 +195,8 @@ final class AppSettings: ObservableObject {
         recordingSounds = defaults.object(forKey: "recordingSounds") == nil ? true : defaults.bool(forKey: "recordingSounds")
         mode = defaults.string(forKey: "mode").flatMap(RewriteMode.init(rawValue:))?.canonical ?? .rewrite
         autoFillClipboard = defaults.object(forKey: "autoFillClipboard") == nil ? true : defaults.bool(forKey: "autoFillClipboard")
+        clipboardHistoryEnabled = defaults.object(forKey: "clipboardHistoryEnabled") == nil
+            ? true : defaults.bool(forKey: "clipboardHistoryEnabled")
         autoCopyResult = defaults.bool(forKey: "autoCopyResult")
         smartIntent = defaults.object(forKey: "smartIntent") == nil ? true : defaults.bool(forKey: "smartIntent")
         history = Self.read([HistoryItem].self, key: "history") ?? []

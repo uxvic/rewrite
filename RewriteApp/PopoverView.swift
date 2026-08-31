@@ -38,6 +38,7 @@ struct PendingRun: Equatable { let systemPrompt: String; let label: String; let 
 
 struct PopoverView: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var clipboard = ClipboardStore.shared
     @StateObject private var speech = SpeechManager()
 
     @State private var threadByMode: [RewriteMode: [ChatTurn]] = [:]
@@ -269,24 +270,42 @@ struct PopoverView: View {
         .frame(maxWidth: .infinity).padding(.top, 40).padding(.horizontal, 18)
     }
 
-    /// Clipboard is deliberately a real destination now, not a hidden future
-    /// feature. The capture/store engine is a separate privacy-sensitive phase,
-    /// so this shell makes the product structure testable without claiming to
-    /// retain any copied content yet.
     private var clipboardPanel: some View {
+        Group {
+            if clipboard.items.isEmpty {
+                clipboardEmptyState
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(clipboard.items) { item in
+                            clipboardRow(item)
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16)
+                    .background(OverlayScrollers())
+                }
+                .safeAreaInset(edge: .top, spacing: 0) { clipboardHistoryHeader }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var clipboardEmptyState: some View {
         VStack(spacing: 18) {
             Spacer(minLength: 0)
             ZStack {
                 Circle().fill(Theme.fillTranslucent.opacity(0.08)).frame(width: 64, height: 64)
-                Image(systemName: "clipboard")
+                Image(systemName: settings.clipboardHistoryEnabled ? "clipboard" : "clipboard.slash")
                     .font(.system(size: 27, weight: .medium))
                     .foregroundStyle(Theme.textPrimary)
             }
             VStack(spacing: 7) {
-                Text("Clipboard history")
+                Text(settings.clipboardHistoryEnabled ? "Clipboard history" : "Clipboard history is paused")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
-                Text("Recent copies will appear here, ready to bring back into Rewrite.")
+                Text(settings.clipboardHistoryEnabled
+                     ? "Copy text anywhere on your Mac and it will appear here."
+                     : "Turn Clipboard History back on in Settings when you are ready to capture again.")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -294,7 +313,7 @@ struct PopoverView: View {
             }
             HStack(spacing: 8) {
                 Image(systemName: "lock.fill").font(.system(size: 11, weight: .semibold))
-                Text("Designed to stay private on this Mac")
+                Text("Stored only on this Mac")
                     .font(.system(size: 12, weight: .medium))
             }
             .foregroundStyle(Theme.textSecondary)
@@ -304,6 +323,83 @@ struct PopoverView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 34)
+    }
+
+    private var clipboardHistoryHeader: some View {
+        HStack {
+            Text("Clipboard history")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .glassFloat(Capsule())
+            Spacer(minLength: 6)
+            Button("Clear") { clipboard.clear() }
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(Theme.textPrimary)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .glassFloat(Capsule())
+                .buttonStyle(.plain)
+                .help("Clear clipboard history")
+        }
+        .padding(.horizontal, 16).padding(.vertical, 8)
+    }
+
+    private func clipboardRow(_ item: ClipboardItem) -> some View {
+        Button { useClipboardItem(item) } label: {
+            HStack(alignment: .top, spacing: 11) {
+                Image(systemName: "doc.on.clipboard")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 18, height: 20)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(clipboardPreview(item.text))
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.textPrimary)
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                    HStack(spacing: 5) {
+                        Text(clipboardTimestamp(item.createdAt))
+                        Text("•")
+                        Text("Use in Rewrite")
+                    }
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer(minLength: 6)
+                Image(systemName: "arrow.up.left")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .padding(.top, 3)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassFloat(RoundedRectangle(cornerRadius: Metric.cardRadius, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Use in Rewrite") { useClipboardItem(item) }
+            Button("Copy") { setClipboard(item.text) }
+            Divider()
+            Button("Remove", role: .destructive) { clipboard.remove(item) }
+        }
+    }
+
+    private func useClipboardItem(_ item: ClipboardItem) {
+        draft = draftIsEmpty ? item.text : draft + "\n\n" + item.text
+        fromClipboard = true
+        selectedAction = nil
+        composerMode = .text
+        showSelectPrompt = false
+        workspaceTab = .rewrite
+    }
+
+    private func clipboardPreview(_ text: String) -> String {
+        text.replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func clipboardTimestamp(_ date: Date) -> String {
+        RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
     }
 
     @ViewBuilder

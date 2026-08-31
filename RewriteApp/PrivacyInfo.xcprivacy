@@ -22,8 +22,9 @@
                 <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
             </array>
         </dict>
-        <!-- The text the user asks to rewrite: sent to the chosen model provider
-             only to produce the rewrite. Not stored, not linked, not tracking. -->
+        <!-- Text is sent to the chosen model provider only after the user asks
+             Rewrite to process it. Clipboard History stays on-device and never
+             sends copied text automatically. Not linked, not tracking. -->
         <dict>
             <key>NSPrivacyCollectedDataType</key>
             <string>NSPrivacyCollectedDataTypeOtherUserContent</string>

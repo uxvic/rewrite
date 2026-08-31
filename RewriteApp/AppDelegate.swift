@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         // app's popover window isn't the key window (fixes "click twice to act").
         contentVC = FirstMouseHostingController(rootView: PopoverView())
         popover.contentViewController = contentVC
+        ClipboardStore.shared.start()
 
         registerHotKeys()
         let nc = NotificationCenter.default
