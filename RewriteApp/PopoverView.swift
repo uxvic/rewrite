@@ -487,59 +487,57 @@ struct PopoverView: View {
 
     // MARK: - Action bar (pick an action, then type & send)
 
-    /// Horizontal, scrollable row of actions under the composer. Tap to select;
-    /// the selected action is applied to the text when it's sent.
+    /// Four direct choices fit in one deliberate row. Everything less frequent
+    /// lives in the native Actions menu below, so the floating card never turns
+    /// into a horizontally scrolling toolbar.
     private var actionBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 7) {
-                // Smart governs the plain (no-action) send in BOTH modes: Writing
-                // polishes text or fulfills a request; Prompt optimizes a draft prompt
-                // or just does it when the input is really content/a request. It's
-                // mutually exclusive with the explicit actions — picking one deselects
-                // the others. `smartIntent` stays the persistent default; a picked
-                // action is a per-send override that hides Smart's highlight.
-                selectableChip(icon: "sparkles", label: "Smart",
-                               selected: settings.smartIntent && selectedAction == nil && composerMode == .text) {
-                    let smartActive = settings.smartIntent && selectedAction == nil && composerMode == .text
-                    selectedAction = nil
-                    composerMode = .text
-                    showSelectPrompt = false
-                    settings.smartIntent = !smartActive
-                }
-                ForEach(Array(settings.mode.actions.enumerated()), id: \.element.id) { idx, action in
-                    selectableChip(icon: action.systemImage, label: action.label,
-                                   selected: selectedAction?.id == action.id) {
-                        selectAction(SelectedAction(id: action.id, systemPrompt: action.systemPrompt, label: action.label))
-                    }
-                    .keyboardShortcut(shortcutKey(idx), modifiers: .command)
-                }
-                ForEach(settings.customPresets) { preset in
-                    selectableChip(icon: "star", label: preset.label,
-                                   selected: selectedAction?.id == preset.id) {
-                        selectAction(SelectedAction(id: preset.id,
-                                                    systemPrompt: RewriteAction.customSystemPrompt(preset.instruction),
-                                                    label: preset.label))
-                    }
-                }
-                selectableChip(icon: "wand.and.rays", label: "Custom…",
-                               selected: composerMode == .instruction) {
-                    toggleCustom()
-                }
+        HStack(spacing: 6) {
+            // Smart can either polish text or fulfill a request. The other three
+            // direct choices are deterministic text transforms.
+            selectableChip(icon: "sparkles", label: "Smart",
+                           selected: settings.smartIntent && selectedAction == nil && composerMode == .text,
+                           horizontalPadding: 10) {
+                let smartActive = settings.smartIntent && selectedAction == nil && composerMode == .text
+                selectedAction = nil
+                composerMode = .text
+                showSelectPrompt = false
+                settings.smartIntent = !smartActive
             }
-            .padding(.horizontal, 2).padding(.vertical, 1)
+            ForEach(settings.mode.quickActions) { action in
+                quickActionChip(action)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 2).padding(.vertical, 1)
+    }
+
+    @ViewBuilder
+    private func quickActionChip(_ action: PresetAction) -> some View {
+        let chip = selectableChip(icon: nil, label: action.label,
+                                  selected: selectedAction?.id == action.id,
+                                  horizontalPadding: 10) {
+            selectQuickAction(action)
+        }
+        if let shortcut = shortcutKey(for: action.id) {
+            chip.keyboardShortcut(shortcut, modifiers: .command)
+        } else {
+            chip
         }
     }
 
-    private func selectableChip(icon: String, label: String, selected: Bool,
+    private func selectableChip(icon: String?, label: String, selected: Bool,
+                                horizontalPadding: CGFloat = 13,
                                 _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Image(systemName: icon).font(.system(size: 11))
-                    .foregroundStyle(selected ? Theme.accentInk : Theme.textSecondary)
+                if let icon {
+                    Image(systemName: icon).font(.system(size: 11))
+                        .foregroundStyle(selected ? Theme.accentInk : Theme.textSecondary)
+                }
                 Text(label).font(.system(size: 12.5))
                     .foregroundStyle(selected ? Theme.accentInk : Theme.textPrimary)
             }
-            .padding(.horizontal, 13).padding(.vertical, 8)
+            .padding(.horizontal, horizontalPadding).padding(.vertical, 8)
             .background {
                 // Quiet translucent chip ON the composer's glass (a nested
                 // material would fight the card); accent fill when selected.
@@ -565,20 +563,124 @@ struct PopoverView: View {
         selectedAction = (selectedAction?.id == sel.id) ? nil : sel
     }
 
+    /// Improve is explicit and predictable, unlike Smart. Selecting it makes
+    /// the intent clear; selecting it again returns to Smart's default behavior.
+    private func selectQuickAction(_ action: PresetAction) {
+        let selection = SelectedAction(id: action.id, systemPrompt: action.systemPrompt, label: action.label)
+        guard action.id == settings.mode.defaultAction.id else {
+            selectAction(selection)
+            return
+        }
+
+        let wasSelected = selectedAction?.id == action.id
+        composerMode = .text
+        showSelectPrompt = false
+        selectedAction = wasSelected ? nil : selection
+        settings.smartIntent = wasSelected
+    }
+
     private func toggleCustom() {
         selectedAction = nil
         composerMode = (composerMode == .instruction) ? .text : .instruction
     }
 
-    private func shortcutKey(_ index: Int) -> KeyEquivalent {
-        guard index < 9 else { return KeyEquivalent("0") }
-        return KeyEquivalent(Character("\(index + 1)"))
+    /// Retain the useful action shortcuts without assigning multiple actions to
+    /// ⌘0 as the old long rail did.
+    private func shortcutKey(for actionID: String) -> KeyEquivalent? {
+        switch actionID {
+        case "paraphrase": return "1"
+        case "grammar": return "2"
+        case "shorter": return "3"
+        case "longer": return "4"
+        case "professional": return "5"
+        case "casual": return "6"
+        case "friendly": return "7"
+        case "optimize": return "8"
+        case "context": return "9"
+        default: return nil
+        }
+    }
+
+    /// Every less-frequent transform and custom preset stays available here,
+    /// grouped rather than hidden in a scrollable strip.
+    private var actionsMenu: some View {
+        Menu {
+            Section("Rewrite") {
+                ForEach(settings.mode.overflowRewriteActions) { action in
+                    actionMenuItem(action)
+                }
+            }
+            Section("Prompt tools") {
+                ForEach(settings.mode.promptToolActions) { action in
+                    actionMenuItem(action)
+                }
+            }
+            if !settings.customPresets.isEmpty {
+                Section("Your actions") {
+                    ForEach(settings.customPresets) { preset in
+                        Button {
+                            selectAction(SelectedAction(id: preset.id,
+                                                        systemPrompt: RewriteAction.customSystemPrompt(preset.instruction),
+                                                        label: preset.label))
+                        } label: {
+                            Label(preset.label, systemImage: "star")
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button { toggleCustom() } label: {
+                Label("Custom instruction…", systemImage: "wand.and.rays")
+            }
+        } label: {
+            actionMenuLabel
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .disabled(isLoading)
+        .opacity(isLoading ? 0.6 : 1)
+        .help("Actions")
+        .accessibilityLabel("Actions")
+    }
+
+    @ViewBuilder
+    private func actionMenuItem(_ action: PresetAction) -> some View {
+        if let shortcut = shortcutKey(for: action.id) {
+            Button {
+                selectAction(SelectedAction(id: action.id, systemPrompt: action.systemPrompt, label: action.label))
+            } label: {
+                Label(action.label, systemImage: action.systemImage)
+            }
+            .keyboardShortcut(shortcut, modifiers: .command)
+        } else {
+            Button {
+                selectAction(SelectedAction(id: action.id, systemPrompt: action.systemPrompt, label: action.label))
+            } label: {
+                Label(action.label, systemImage: action.systemImage)
+            }
+        }
+    }
+
+    private var actionMenuLabel: some View {
+        let active = composerMode == .instruction
+            || settings.mode.overflowActions.contains(where: { $0.id == selectedAction?.id })
+            || settings.customPresets.contains(where: { $0.id == selectedAction?.id })
+
+        return Image(systemName: "ellipsis.circle")
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(active ? Theme.accent : Theme.textPrimary)
+            .frame(width: 32, height: 32)
+            .background(Circle().fill(active ? Theme.accent.opacity(0.20) : Theme.fillTranslucent.opacity(0.08)))
+            .overlay(Circle().stroke(Theme.fillTranslucent.opacity(active ? 0.16 : 0.10), lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.18), radius: 4, y: 1)
+            .contentShape(Circle())
     }
 
     // MARK: - Composer (Siri bottom bar: + · glass field · mic/send)
 
-    /// One floating glass card: the field on top, the action chips, then the tool
-    /// row — New · Chats · Settings · (space) · Dictate · Send ⏎.
+    /// One floating glass card: the field on top, the direct action chips, then
+    /// the tool row — New · Chats · Settings · Actions · (space) · Dictate · Send.
     private var composer: some View {
         VStack(spacing: 10) {
             if showSelectPrompt && !draftIsEmpty { selectPrompt }
@@ -592,6 +694,7 @@ struct PopoverView: View {
                 }
                 IconButton(systemName: "clock.arrow.circlepath", size: 32, help: "Chats") { panel = .history }
                 IconButton(systemName: "gearshape", size: 32, help: "Settings") { panel = .settings }
+                actionsMenu
                 Spacer(minLength: 4)
                 IconButton(systemName: "mic.fill", size: 32, help: "Dictate") { enterVoiceMode() }
                 sendControl
