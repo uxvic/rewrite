@@ -30,3 +30,10 @@ Owner: CODEX
 - Files: `HANDOFF.md`. The branch update was protected with `--force-with-lease`; the former `rewrite` tip remains available on `codex/rewrite-before-claude-baseline`.
 - Next: restore `script/build_and_run.sh` and the local Run environment from the preserved work, then verify the adopted baseline builds before changing product UI or clipboard code.
 - No files are reserved for Claude. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `2ba153a`
+
+- Restored the project-local Debug build/run entrypoint from the preserved branch without changing application behaviour.
+- Files: `script/build_and_run.sh`, `.codex/environments/environment.toml`.
+- Next: run the adopted Claude baseline through an unsigned Debug build and verify its output before integrating any features from the preserved implementation.
+- No files are reserved for Claude. Owner remains CODEX.
