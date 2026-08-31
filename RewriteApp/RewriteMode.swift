@@ -9,45 +9,39 @@ struct PresetAction: Identifiable, Equatable {
     let systemPrompt: String
 }
 
-/// Top-level mode that swaps the available actions + input hints.
-enum RewriteMode: String, CaseIterable, Identifiable, Codable {
+/// Rewrite now has one unified flow. `writing` and `prompt` remain only so
+/// existing local preferences, history, and conversations decode safely.
+enum RewriteMode: String, Identifiable, Codable {
+    case rewrite
+    @available(*, deprecated, message: "Legacy persisted value; use rewrite.")
     case writing
+    @available(*, deprecated, message: "Legacy persisted value; use rewrite.")
     case prompt
 
+    /// Only the unified destination is presented in the product UI.
+    static var allCases: [RewriteMode] { [.rewrite] }
+
     var id: String { rawValue }
-    var title: String { self == .writing ? "WRITING" : "PROMPT" }
+    var canonical: RewriteMode { .rewrite }
+    var title: String { "REWRITE" }
+    var inputPlaceholder: String { "Rewrite or ask…" }
+    var customHint: String { "Describe how to transform it…" }
 
-    var inputPlaceholder: String {
-        self == .writing ? "Type, paste or dictate…" : "Paste a rough prompt…"
-    }
-    var customHint: String {
-        self == .writing ? "Custom instruction…" : "Custom prompt instruction…"
-    }
-
+    /// The established writing transforms, plus prompt optimization as an
+    /// explicit unified action rather than a separate destination.
     var actions: [PresetAction] {
-        switch self {
-        case .writing:
-            return RewriteAction.allCases.map {
-                PresetAction(id: $0.rawValue, label: $0.label, systemImage: $0.systemImage, systemPrompt: $0.systemPrompt)
-            }
-        case .prompt:
-            return Self.promptActions
-        }
+        RewriteAction.allCases.map {
+            PresetAction(id: $0.rawValue, label: $0.label, systemImage: $0.systemImage, systemPrompt: $0.systemPrompt)
+        } + Self.promptActions
     }
 
-    /// The action applied when the user sends text without explicitly picking one.
-    /// Writing: a light polish (fix grammar + improve clarity). Prompt: Optimize.
+    /// The default remains a light polish so plain Send behaves predictably.
     var defaultAction: PresetAction {
-        switch self {
-        case .writing:
-            return PresetAction(
-                id: "auto", label: "Improve", systemImage: "sparkles",
-                systemPrompt: RewriteAction.customSystemPrompt(
-                    "Fix any grammar, spelling and punctuation mistakes and lightly improve clarity and flow, "
-                    + "without changing the meaning, tone, or language."))
-        case .prompt:
-            return Self.promptActions[0]   // "Optimize"
-        }
+        PresetAction(
+            id: "auto", label: "Improve", systemImage: "sparkles",
+            systemPrompt: RewriteAction.customSystemPrompt(
+                "Fix any grammar, spelling and punctuation mistakes and lightly improve clarity and flow, "
+                + "without changing the meaning, tone, or language."))
     }
 
     // MARK: - Prompt-engineering actions

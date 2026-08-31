@@ -10,7 +10,7 @@ final class ChatEngine: ObservableObject {
     @Published var conversation: Conversation
     @Published var draft: String = ""
     @Published var isLoading = false
-    /// nil = Smart (Writing) or the mode's default; otherwise an explicit action id.
+    /// nil = Smart or the flow's default; otherwise an explicit action id.
     @Published var selectedActionID: String?
 
     /// Invoked after any change worth persisting (the window saves to the store).
@@ -24,8 +24,8 @@ final class ChatEngine: ObservableObject {
     // MARK: - Derived
 
     var turns: [ChatTurn] { conversation.turns }
-    var mode: RewriteMode { conversation.mode }
-    var actions: [PresetAction] { conversation.mode.actions }
+    var mode: RewriteMode { conversation.mode.canonical }
+    var actions: [PresetAction] { conversation.mode.canonical.actions }
     var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading
     }
@@ -52,8 +52,9 @@ final class ChatEngine: ObservableObject {
     }
 
     func setMode(_ m: RewriteMode) {
-        guard m != conversation.mode else { return }
-        conversation.mode = m
+        let canonical = m.canonical
+        guard canonical != conversation.mode else { return }
+        conversation.mode = canonical
         selectedActionID = nil
         persist()
     }
@@ -75,11 +76,10 @@ final class ChatEngine: ObservableObject {
         let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
 
-        // Smart plain send (no explicit action) → one decide-and-act pass. Writing
-        // polishes/fulfills; Prompt optimizes-or-fulfills.
+        // Smart plain send (no explicit action) → one decide-and-act pass.
         if selectedActionID == nil && settings.smartIntent {
             addUserTurn(t)
-            run(systemPrompt: "", label: conversation.mode == .prompt ? "Optimize" : "Improve", smart: true)
+            run(systemPrompt: "", label: "Improve", smart: true)
             return
         }
         let action = resolveAction()
@@ -118,9 +118,7 @@ final class ChatEngine: ObservableObject {
         currentTask?.cancel()
         isLoading = true
 
-        let prompt = smart
-            ? (conversation.mode == .prompt ? RewriteAction.promptSmartSystemPrompt : RewriteAction.smartSystemPrompt)
-            : systemPrompt
+        let prompt = smart ? RewriteAction.smartSystemPrompt : systemPrompt
         let turn = ChatTurn(role: .assistant, text: "", actionLabel: label,
                             systemPrompt: prompt, isStreaming: true, sourceText: src,
                             fulfillsRequest: !wrap && !smart, isSmart: smart)
@@ -132,7 +130,7 @@ final class ChatEngine: ObservableObject {
         if smart { payload = smartContextPayload() ?? src }
         else { payload = wrap ? RewriteAction.wrap(src) : src }
         if variation { payload += "\n\n(Give a noticeably different alternative version.)" }
-        let runMode = conversation.mode
+        let runMode = conversation.mode.canonical
 
         currentTask = Task {
             await streamBody(turnID: id, src: src, payload: payload, systemPrompt: prompt,

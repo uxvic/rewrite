@@ -31,22 +31,22 @@ struct HistoryItem: Codable, Identifiable {
     let actionLabel: String
     let input: String
     let output: String
-    var mode: RewriteMode = .writing
+    var mode: RewriteMode = .rewrite
 
     private enum CodingKeys: String, CodingKey { case id, actionLabel, input, output, mode }
 
-    init(id: String, actionLabel: String, input: String, output: String, mode: RewriteMode = .writing) {
-        self.id = id; self.actionLabel = actionLabel; self.input = input; self.output = output; self.mode = mode
+    init(id: String, actionLabel: String, input: String, output: String, mode: RewriteMode = .rewrite) {
+        self.id = id; self.actionLabel = actionLabel; self.input = input; self.output = output; self.mode = mode.canonical
     }
 
-    // Decode older saved items that predate `mode` by defaulting to .writing.
+    // Decode older saved items that predate `mode` into the unified flow.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         actionLabel = try c.decode(String.self, forKey: .actionLabel)
         input = try c.decode(String.self, forKey: .input)
         output = try c.decode(String.self, forKey: .output)
-        mode = try c.decodeIfPresent(RewriteMode.self, forKey: .mode) ?? .writing
+        mode = (try c.decodeIfPresent(RewriteMode.self, forKey: .mode))?.canonical ?? .rewrite
     }
 }
 
@@ -151,8 +151,8 @@ final class AppSettings: ObservableObject {
     @Published var autoCopyResult: Bool {
         didSet { defaults.set(autoCopyResult, forKey: "autoCopyResult") }
     }
-    /// Smart send: on a plain send (no style picked) in Writing, classify whether
-    /// the input is text to polish or a request to fulfill, and act accordingly.
+    /// Smart send: on a plain send (no style picked), classify whether the input
+    /// is text to polish or a request to fulfill, and act accordingly.
     @Published var smartIntent: Bool {
         didSet { defaults.set(smartIntent, forKey: "smartIntent") }
     }
@@ -188,12 +188,14 @@ final class AppSettings: ObservableObject {
             .flatMap(RewriteAction.init(rawValue:)) ?? .paraphrase
         launchAtLogin = LoginItem.isEnabled
         recordingSounds = defaults.object(forKey: "recordingSounds") == nil ? true : defaults.bool(forKey: "recordingSounds")
-        mode = defaults.string(forKey: "mode").flatMap(RewriteMode.init(rawValue:)) ?? .writing
+        let savedMode = defaults.string(forKey: "mode").flatMap(RewriteMode.init(rawValue:))?.canonical ?? .rewrite
+        mode = savedMode
         autoFillClipboard = defaults.object(forKey: "autoFillClipboard") == nil ? true : defaults.bool(forKey: "autoFillClipboard")
         autoCopyResult = defaults.bool(forKey: "autoCopyResult")
         smartIntent = defaults.object(forKey: "smartIntent") == nil ? true : defaults.bool(forKey: "smartIntent")
         history = Self.read([HistoryItem].self, key: "history") ?? []
         customPresets = Self.read([CustomPreset].self, key: "customPresets") ?? []
+        defaults.set(savedMode.rawValue, forKey: "mode")
     }
 
     func makeProvider() -> RewriteProvider {

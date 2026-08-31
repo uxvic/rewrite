@@ -47,8 +47,7 @@ struct PopoverView: View {
     // maps a mode to the conversation its thread is currently backed by.
     @ObservedObject private var store = ConversationStore.shared
     @State private var currentConvoID: [RewriteMode: UUID] = [:]
-    // The draft is shared across modes (so a half-typed message survives a
-    // Writing↔Prompt switch); only the conversations stay divided by mode.
+    // The unified flow keeps one draft and one active conversation key.
     @State private var draft: String = ""
     @State private var composerMode: ComposerMode = .text
     @State private var selectedAction: SelectedAction?
@@ -67,12 +66,11 @@ struct PopoverView: View {
     private enum Panel { case main, settings, history }
     @State private var panel: Panel = .main
 
-    /// Which mode's rewrites the History panel is showing (its own Writing/Prompt
-    /// tab, independent of the chat's active mode).
-    @State private var historyMode: RewriteMode = .writing
+    /// The unified Rewrite flow shown by the saved-chat panel.
+    @State private var historyMode: RewriteMode = .rewrite
 
-    /// Writing and Prompt keep separate conversations + drafts, keyed by mode,
-    /// so switching tabs never mixes their messages.
+    /// The dictionary preserves the existing storage shape while the product has
+    /// one canonical Rewrite key.
     private var thread: [ChatTurn] {
         get { threadByMode[settings.mode] ?? [] }
         nonmutating set { threadByMode[settings.mode] = newValue }
@@ -123,12 +121,12 @@ struct PopoverView: View {
     // MARK: - Main surface (background-less)
 
     /// The chat as floating glass over the desktop: thread on top, the composer
-    /// card, then the Writing/Prompt tab — nothing containing them. There is no
+    /// card, then the Rewrite tab — nothing containing them. There is no
     /// header; Chats/Settings live in the composer's tool row (and the menu-bar
     /// right-click menu), ✕ is replaced by Esc / click-outside / icon toggle.
     private var mainSurface: some View {
         VStack(spacing: 12) {
-            modeSegmented($settings.mode, width: 220)   // Writing/Prompt — at the TOP of the chat
+            modeSegmented($settings.mode, width: 220)   // Rewrite — at the TOP of the chat
             threadView
             composer
         }
@@ -179,8 +177,8 @@ struct PopoverView: View {
         .padding(.bottom, 22)
     }
 
-    /// Soft segmented WRITING / PROMPT pill, bound to any mode selection so it can
-    /// drive both the bottom tab and the Chats filter. Its own piece of glass.
+    /// The unified Rewrite marker remains a small glass control at the top of the
+    /// floating surface. Clipboard will become its second destination later.
     private func modeSegmented(_ selection: Binding<RewriteMode>, width: CGFloat = 200) -> some View {
         HStack(spacing: 0) {
             ForEach(RewriteMode.allCases) { m in
@@ -275,9 +273,7 @@ struct PopoverView: View {
     /// card), so an empty chat already looks like a conversation.
     private var emptyState: some View {
         HStack {
-            Text(settings.mode == .writing
-                 ? "Paste, type, or dictate the text you want to rework — then pick how to rewrite it."
-                 : "Paste a rough prompt — then pick how to improve it.")
+            Text("Paste, type, or dictate text to rework. You can also ask Rewrite to draft something new.")
                 .font(.system(size: 13.5)).foregroundStyle(Theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 14).padding(.vertical, 11)
@@ -636,7 +632,7 @@ struct PopoverView: View {
     /// The former "History" surface, now a browser of the shared saved
     /// conversations — the same chats the window shows, permanent (no 20-item cap).
     private var historyPanel: some View {
-        let chats = store.conversations.filter { $0.mode == historyMode }
+        let chats = store.conversations
         return Group {
             if chats.isEmpty {
                 Text("No \(historyMode.title.capitalized) chats yet.")
@@ -692,12 +688,13 @@ struct PopoverView: View {
         return text?.replacingOccurrences(of: "\n", with: " ")
     }
 
-    /// Open a saved chat into the popover's thread (switching to its mode).
+    /// Open a saved chat into the unified popover thread.
     private func openConversation(_ c: Conversation) {
         currentTask?.cancel(); isLoading = false
-        settings.mode = c.mode
-        currentConvoID[c.mode] = c.id
-        threadByMode[c.mode] = c.turns
+        let mode = c.mode.canonical
+        settings.mode = mode
+        currentConvoID[mode] = c.id
+        threadByMode[mode] = c.turns
         selectedAction = nil; composerMode = .text; showSelectPrompt = false
         panel = .main
         injectWhatsNewIfNeeded()
@@ -733,7 +730,7 @@ struct PopoverView: View {
     /// one lazily on the first turn) so the window sees it. Ephemeral cards
     /// (What's New / setup) are never saved.
     private func syncCurrent() {
-        let mode = settings.mode
+        let mode = settings.mode.canonical
         let turns = (threadByMode[mode] ?? []).filter { $0.role == .user || $0.role == .assistant }
         guard !turns.isEmpty else { return }
         let id = currentConvoID[mode] ?? {
@@ -756,16 +753,14 @@ struct PopoverView: View {
             run(systemPrompt: RewriteAction.customSystemPrompt(t), label: "Custom: \(t)")
             return
         }
-        // Smart plain send (no explicit action): one decide-and-act pass. In Writing
-        // it polishes text or fulfills a request; in Prompt it optimizes a draft
-        // prompt or — when the input is really content/a request — just does it.
+        // Smart plain send (no explicit action): one decide-and-act pass that
+        // either polishes text or fulfills a request.
         if selectedAction == nil && settings.smartIntent {
             addUserTurn(t)
-            run(systemPrompt: "", label: settings.mode == .prompt ? "Optimize" : "Improve", smart: true)
+            run(systemPrompt: "", label: "Improve", smart: true)
             return
         }
-        // No explicit action picked → apply the mode's sensible default
-        // (Writing: fix grammar + light polish; Prompt: optimize) instead of
+        // No explicit action picked → apply the unified default instead of
         // sending raw text that never gets rewritten.
         let sel = selectedAction ?? {
             let d = settings.mode.defaultAction
@@ -795,16 +790,13 @@ struct PopoverView: View {
                      source: String? = nil, wrap: Bool = true, smart: Bool = false) {
         let src = (source ?? latestUserText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !src.isEmpty else { return }
-        let runMode = settings.mode   // tag history with the mode this rewrite belongs to
+        let runMode = settings.mode.canonical
         currentTask?.cancel()
         isLoading = true
 
         // Smart uses its own single prompt and never wraps (it may legitimately
         // "answer" a request); the label is provisional until the tag resolves.
-        // Prompt mode gets a Smart that optimizes-or-fulfills; Writing polishes-or-fulfills.
-        let prompt = smart
-            ? (runMode == .prompt ? RewriteAction.promptSmartSystemPrompt : RewriteAction.smartSystemPrompt)
-            : systemPrompt
+        let prompt = smart ? RewriteAction.smartSystemPrompt : systemPrompt
         let turn = ChatTurn(role: .assistant, text: "", actionLabel: label,
                             systemPrompt: prompt, isStreaming: true, sourceText: src,
                             fulfillsRequest: !wrap && !smart, isSmart: smart)
@@ -1337,10 +1329,10 @@ struct WhatsNewCardView: View {
     private let highlights: [Highlight] = [
         .init(icon: "macwindow", title: "A full app window",
               blurb: "Open Rewrite as a resizable app from the Dock or Launchpad, with a conversations sidebar — your chats are saved and you pick up right where you left off."),
-        .init(icon: "sparkles", title: "Smart in Prompt mode too",
-              blurb: "In Prompt mode, Smart now decides for you: it sharpens a rough prompt, or — if you actually pasted something to write — just does it, instead of getting stuck."),
+        .init(icon: "sparkles", title: "Smart does the right thing",
+              blurb: "Smart now recognizes whether you pasted text to polish or a request to carry out, then takes the appropriate path without making you choose a mode."),
         .init(icon: "sidebar.left", title: "Chats, kept tidy",
-              blurb: "Writing and Prompt keep separate threads, each in its own list, so your conversations never get tangled."),
+              blurb: "All Rewrite chats live together in one saved list, so you can pick up any conversation from the menu bar or the full window."),
         .init(icon: "gearshape", title: "Settings within reach",
               blurb: "Providers, your API key, models and presets are one click away — in the menu bar and at the bottom of the app's sidebar.")
     ]

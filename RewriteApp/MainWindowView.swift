@@ -48,22 +48,10 @@ struct MainWindowView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
-            // Writing / Prompt — the top-level mode switch lives in the side nav.
-            HStack(spacing: 0) {
-                ForEach(RewriteMode.allCases) { m in
-                    Button { switchMode(m) } label: {
-                        Text(m == .writing ? "Writing" : "Prompt")
-                            .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(engine.mode == m ? Theme.accentInk : Theme.textSecondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(engine.mode == m ? Theme.accent : Color.clear, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(4)
-            .background(Theme.fillTranslucent.opacity(0.06), in: Capsule())
+            Text("Rewrite")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 18)
 
             HStack {
@@ -77,7 +65,7 @@ struct MainWindowView: View {
             .padding(.horizontal, 14).padding(.bottom, 8)
 
             List(selection: $selection) {
-                ForEach(store.conversations.filter { $0.mode == engine.mode }) { c in
+                ForEach(store.conversations) { c in
                     Text(c.title.isEmpty ? "New chat" : c.title)
                         .lineLimit(1)
                         .foregroundStyle(Theme.textPrimary)
@@ -179,7 +167,7 @@ struct MainWindowView: View {
             Menu("Retry") {
                 Button("Try again") { engine.retryAgain(turn) }
                 Divider()
-                ForEach(RewriteMode.writing.actions) { a in
+                ForEach(RewriteMode.rewrite.actions) { a in
                     Button(a.label) { engine.retryAs(a, turn) }
                 }
             }
@@ -246,28 +234,16 @@ struct MainWindowView: View {
 
     // MARK: - Actions
 
-    /// Writing and Prompt are separate threads: switching the mode opens that
-    /// mode's most-recent conversation (starting a fresh one if there isn't any),
-    /// instead of relabeling the current thread.
-    private func switchMode(_ m: RewriteMode) {
-        guard m != engine.conversation.mode else { return }
-        let target = store.conversations.first(where: { $0.mode == m }) ?? store.create(mode: m)
-        engine.open(target)
-        selection = target.id
-    }
-
     private func newChat() {
-        let c = store.create(mode: engine.conversation.mode)
+        let c = store.create()
         engine.open(c)
         selection = c.id
     }
 
     private func delete(_ id: UUID) {
-        let mode = engine.conversation.mode
         store.delete(id)
         if engine.conversation.id == id {
-            // Stay in the same mode after deleting the open chat.
-            let next = store.conversations.first(where: { $0.mode == mode }) ?? store.create(mode: mode)
+            let next = store.conversations.first ?? store.create()
             engine.open(next)
             selection = next.id
         }

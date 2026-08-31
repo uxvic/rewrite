@@ -71,7 +71,7 @@ struct SettingsView: View {
                 .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
             Toggle("Smart send (rewrite vs. fulfill a request)", isOn: $settings.smartIntent)
                 .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
-            desc("With Smart on, a plain send in Writing figures out whether you gave it text to polish or a request to carry out (e.g. “draft an email…”) and does the right thing. Explicit styles always rewrite literally.")
+            desc("With Smart on, a plain send in Rewrite figures out whether you gave it text to polish or a request to carry out (e.g. “draft an email…”) and does the right thing. Explicit actions always rewrite literally.")
             desc("Pre-fill reads your clipboard when the popover opens; macOS may briefly show a “pasted from…” note. Turn it off here if you prefer.")
             hotkeyRow("OPEN POPOVER", selection: $settings.popoverHotKeyID)
             hotkeyRow("REWRITE SELECTION", selection: $settings.inPlaceHotKeyID)

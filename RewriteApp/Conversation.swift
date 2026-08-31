@@ -2,8 +2,8 @@ import Foundation
 import Combine
 
 /// A saved, named conversation for the windowed (ChatGPT-style) app: the full
-/// turn list plus the mode it belongs to. Persisted as JSON. The menu-bar popover
-/// keeps its own transient per-mode threads; this is the durable, multi-chat store.
+/// turn list plus the Rewrite flow it belongs to. Persisted as JSON. The menu-bar
+/// popover keeps its own transient thread; this is the durable, multi-chat store.
 struct Conversation: Identifiable, Codable, Equatable {
     var id = UUID()
     var title: String
@@ -12,11 +12,11 @@ struct Conversation: Identifiable, Codable, Equatable {
     var createdAt: Date
     var updatedAt: Date
 
-    init(id: UUID = UUID(), title: String = "New chat", mode: RewriteMode = .writing,
+    init(id: UUID = UUID(), title: String = "New chat", mode: RewriteMode = .rewrite,
          turns: [ChatTurn] = [], createdAt: Date = Date(), updatedAt: Date = Date()) {
         self.id = id
         self.title = title
-        self.mode = mode
+        self.mode = mode.canonical
         self.turns = turns
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -56,7 +56,18 @@ final class ConversationStore: ObservableObject {
         guard let data = try? Data(contentsOf: fileURL),
               let decoded = try? JSONDecoder().decode([Conversation].self, from: data)
         else { return }
-        conversations = decoded.sorted { $0.updatedAt > $1.updatedAt }
+        var migrated = false
+        conversations = decoded.map { conversation in
+            var canonical = conversation
+            let mode = canonical.mode.canonical
+            if canonical.mode != mode {
+                canonical.mode = mode
+                migrated = true
+            }
+            return canonical
+        }
+        .sorted { $0.updatedAt > $1.updatedAt }
+        if migrated { persist() }
     }
 
     private func persist() {
@@ -66,8 +77,8 @@ final class ConversationStore: ObservableObject {
 
     /// Creates a new empty conversation at the top and returns it.
     @discardableResult
-    func create(mode: RewriteMode = .writing) -> Conversation {
-        let convo = Conversation(mode: mode)
+    func create(mode: RewriteMode = .rewrite) -> Conversation {
+        let convo = Conversation(mode: mode.canonical)
         conversations.insert(convo, at: 0)
         persist()
         return convo
@@ -77,6 +88,7 @@ final class ConversationStore: ObservableObject {
     /// still "New chat", and bumps it to the top by recency.
     func save(_ conversation: Conversation) {
         var c = conversation
+        c.mode = c.mode.canonical
         c.updatedAt = Date()
         if c.title == "New chat" { c.title = Conversation.derivedTitle(from: c.turns) }
         if let i = conversations.firstIndex(where: { $0.id == c.id }) {
