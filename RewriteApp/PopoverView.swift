@@ -38,6 +38,7 @@ struct PendingRun: Equatable { let systemPrompt: String; let label: String; let 
 
 struct PopoverView: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var clipboard = ClipboardStore.shared
     @StateObject private var speech = SpeechManager()
 
     @State private var threadByMode: [RewriteMode: [ChatTurn]] = [:]
@@ -66,8 +67,28 @@ struct PopoverView: View {
     private enum Panel { case main, settings, history }
     @State private var panel: Panel = .main
 
-    /// The unified Rewrite flow shown by the saved-chat panel.
-    @State private var historyMode: RewriteMode = .rewrite
+    /// Destinations in the floating surface. This is intentionally separate
+    /// from `RewriteMode`: Clipboard is navigation, never an AI/chat mode.
+    private enum QuickDestination: CaseIterable, Identifiable {
+        case rewrite
+        case clipboard
+
+        var id: Self { self }
+        var title: String {
+            switch self {
+            case .rewrite: return "Rewrite"
+            case .clipboard: return "Clipboard"
+            }
+        }
+        var systemImage: String {
+            switch self {
+            case .rewrite: return "wand.and.stars"
+            case .clipboard: return "doc.on.clipboard"
+            }
+        }
+    }
+
+    @State private var destination: QuickDestination = .rewrite
 
     /// The dictionary preserves the existing storage shape while the product has
     /// one canonical Rewrite key.
@@ -126,9 +147,13 @@ struct PopoverView: View {
     /// right-click menu), ✕ is replaced by Esc / click-outside / icon toggle.
     private var mainSurface: some View {
         VStack(spacing: 12) {
-            modeSegmented($settings.mode, width: 220)   // Rewrite — at the TOP of the chat
-            threadView
-            composer
+            destinationSegmented
+            switch destination {
+            case .rewrite:
+                rewriteSurface
+            case .clipboard:
+                clipboardSurface
+            }
         }
         // Hang from the TOP so the whole stack sits right under the menu-bar icon
         // (no basin above it). The 22pt gutters give element shadows + the blob
@@ -137,6 +162,27 @@ struct PopoverView: View {
         .padding(.top, 10)
         .background(contrastBlob)   // separates the glass from any desktop, light or dark
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// The existing conversational surface remains unchanged within the new
+    /// Rewrite destination. Keeping it isolated prevents Clipboard navigation
+    /// from affecting saved-chat or model semantics.
+    private var rewriteSurface: some View {
+        VStack(spacing: 12) {
+            threadView
+            composer
+        }
+    }
+
+    /// Clipboard is a peer destination, not a drill-down panel. Its own single
+    /// glass card stays bounded so the quick surface continues to float.
+    private var clipboardSurface: some View {
+        ClipboardHistoryView(
+            store: clipboard,
+            onCopy: copyClipboardItem,
+            onUse: useClipboardItemInRewrite
+        )
+        .frame(maxHeight: 520)
     }
 
     /// A soft blob behind the whole stack so the glass never blends into the
@@ -177,26 +223,32 @@ struct PopoverView: View {
         .padding(.bottom, 22)
     }
 
-    /// The unified Rewrite marker remains a small glass control at the top of the
-    /// floating surface. Clipboard will become its second destination later.
-    private func modeSegmented(_ selection: Binding<RewriteMode>, width: CGFloat = 200) -> some View {
+    /// A small, centered glass tab control. It is navigation only: Rewrite still
+    /// owns the one canonical AI mode and Clipboard owns no conversations.
+    private var destinationSegmented: some View {
         HStack(spacing: 0) {
-            ForEach(RewriteMode.allCases) { m in
-                let active = selection.wrappedValue == m
-                Text(m.title.capitalized)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(active ? Theme.accentInk : Theme.textSecondary)
-                    .frame(maxWidth: .infinity).padding(.vertical, 7)
-                    .background {
-                        if active { Capsule().fill(Theme.accent) }
-                    }
-                    .contentShape(Capsule())
-                    .onTapGesture { withAnimation(.easeInOut(duration: 0.18)) { selection.wrappedValue = m } }
+            ForEach(QuickDestination.allCases) { item in
+                let active = destination == item
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) { destination = item }
+                } label: {
+                    Label(item.title, systemImage: item.systemImage)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(active ? Theme.accentInk : Theme.textSecondary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 7)
+                        .background {
+                            if active { Capsule().fill(Theme.accent) }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(item.title)
+                .accessibilityAddTraits(active ? .isSelected : [])
             }
         }
         .padding(3)
         .liquidGlass(Capsule())
-        .frame(width: width)
+        .frame(width: 224)
     }
 
     // MARK: - What's new
@@ -635,7 +687,7 @@ struct PopoverView: View {
         let chats = store.conversations
         return Group {
             if chats.isEmpty {
-                Text("No \(historyMode.title.capitalized) chats yet.")
+                Text("No chats yet.")
                     .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -649,18 +701,19 @@ struct PopoverView: View {
             }
         }
         .frame(maxHeight: .infinity)
-        // The filter row floats as glass and the rows scroll UNDER it (and the
-        // header), so there's no solid band at the top — same as the chat.
+        // The rows scroll under a compact control row, matching the chat's
+        // background-less floating composition without a second tab selector.
         .safeAreaInset(edge: .top, spacing: 0) {
             HStack {
-                modeSegmented($historyMode, width: 200)
+                Text("All Rewrite chats")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
                 Spacer(minLength: 6)
                 Button { startNewChatFromList() } label: { miniCapsule("square.and.pencil", "New") }
                     .buttonStyle(.plain)
             }
             .padding(.horizontal, 16).padding(.vertical, 8)
         }
-        .onAppear { historyMode = settings.mode }
     }
 
     private func chatRow(_ c: Conversation) -> some View {
@@ -703,7 +756,26 @@ struct PopoverView: View {
     private func startNewChatFromList() {
         newChat()
         panel = .main
+        destination = .rewrite
         injectWhatsNewIfNeeded()
+    }
+
+    /// Copying is explicit, and the clipboard monitor will naturally move the
+    /// item to the front of its local history after its next poll.
+    private func copyClipboardItem(_ item: ClipboardItem) {
+        setClipboard(item.text)
+    }
+
+    /// "Use" only places a copied item in Rewrite's composer. It never sends
+    /// text to a provider, preserving the user-controlled transition from a
+    /// private clipboard item to an AI request.
+    private func useClipboardItemInRewrite(_ item: ClipboardItem) {
+        draft = item.text
+        fromClipboard = true
+        selectedAction = nil
+        composerMode = .text
+        showSelectPrompt = false
+        withAnimation(.easeInOut(duration: 0.18)) { destination = .rewrite }
     }
 
     private func deleteConversation(_ c: Conversation) {

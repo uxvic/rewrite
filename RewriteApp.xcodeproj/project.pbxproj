@@ -39,6 +39,7 @@
 		3A000000000000000000001D /* ChatEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A000000000000000000001D /* ChatEngine.swift */; };
 		3A000000000000000000001C /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A000000000000000000001C /* Conversation.swift */; };
 		3A0000000000000000000022 /* ClipboardStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000022 /* ClipboardStore.swift */; };
+		3A0000000000000000000023 /* ClipboardHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000023 /* ClipboardHistoryView.swift */; };
 		3A0000000000000000000020 /* Sparkle.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000020 /* Sparkle.framework */; };
 		3C0000000000000000000020 /* Sparkle.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2A0000000000000000000020 /* Sparkle.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -78,6 +79,7 @@
 		2A000000000000000000001D /* ChatEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatEngine.swift; sourceTree = "<group>"; };
 		2A000000000000000000001C /* Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Conversation.swift; sourceTree = "<group>"; };
 		2A0000000000000000000022 /* ClipboardStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardStore.swift; sourceTree = "<group>"; };
+		2A0000000000000000000023 /* ClipboardHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardHistoryView.swift; sourceTree = "<group>"; };
 		2A0000000000000000000020 /* Sparkle.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Sparkle.framework; path = Frameworks/Sparkle.framework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -157,6 +159,7 @@
 				2A000000000000000000001D /* ChatEngine.swift */,
 				2A000000000000000000001C /* Conversation.swift */,
 				2A0000000000000000000022 /* ClipboardStore.swift */,
+				2A0000000000000000000023 /* ClipboardHistoryView.swift */,
 				2A0000000000000000000016 /* AppIcon.icns */,
 				2A0000000000000000000021 /* PrivacyInfo.xcprivacy */,
 				1A0000000000000000000010 /* Info.plist */,
@@ -265,6 +268,7 @@
 				3A000000000000000000001D /* ChatEngine.swift in Sources */,
 				3A000000000000000000001C /* Conversation.swift in Sources */,
 				3A0000000000000000000022 /* ClipboardStore.swift in Sources */,
+				3A0000000000000000000023 /* ClipboardHistoryView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

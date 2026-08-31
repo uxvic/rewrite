@@ -67,14 +67,8 @@ struct SettingsView: View {
                 .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
             Toggle("Pre-fill from clipboard on open", isOn: $settings.autoFillClipboard)
                 .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
-            HStack {
-                Toggle("Clipboard history", isOn: $settings.clipboardHistoryEnabled)
-                    .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
-                Spacer()
-                Button("Clear History", role: .destructive) { ClipboardStore.shared.clear() }
-                    .buttonStyle(.borderless)
-                    .font(.system(size: 11, weight: .semibold))
-            }
+            Toggle("Clipboard history", isOn: $settings.clipboardHistoryEnabled)
+                .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
             Toggle("Copy result automatically", isOn: $settings.autoCopyResult)
                 .font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
             Toggle("Smart send (rewrite vs. fulfill a request)", isOn: $settings.smartIntent)
