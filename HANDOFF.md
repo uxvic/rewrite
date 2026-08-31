@@ -12,7 +12,7 @@ Owner: CODEX
 - [ ] Verify the floating quick surface directly under the menu-bar icon.
 - [x] Reintroduce one unified Rewrite flow without compromising the floating composition.
 - [x] Add automatic, private local Clipboard History capture and controls.
-- [ ] Integrate Clipboard History as a separate destination in the floating surface.
+- [x] Integrate Clipboard History as a separate destination in the floating surface.
 - [ ] Tune the visual hierarchy against the supplied Apple Liquid Glass references.
 - [ ] Add focused accessibility and interaction verification, then prepare a review checkpoint.
 
@@ -62,3 +62,11 @@ Owner: CODEX
 - Concealed and transient pasteboard types are excluded; copied items are never sent to a provider unless a future explicit user action places one in the composer. Capture has an enabled-by-default Settings toggle and a Clear History control.
 - Verified with `./script/build_and_run.sh --verify`, `plutil -lint RewriteApp/PrivacyInfo.xcprivacy`, and macOS accessibility inspection of the Settings controls. I did not overwrite Victor's current clipboard to fabricate a capture test.
 - Next: design and build the Clipboard destination into the existing top floating-tab treatment, then compact the unified action rail without changing the panel host or glass primitives. Owner remains CODEX.
+
+### 2026-08-31 — CODEX — commit `29e0a4c`
+
+- Added Clipboard as a peer destination in Claude's existing top floating-tab treatment, without touching `FloatingPanel`, its 424×700 host, anchoring, or the `liquidGlass` implementation.
+- Files: `RewriteApp/PopoverView.swift`, new `RewriteApp/ClipboardHistoryView.swift`, `RewriteApp/SettingsView.swift`, and `RewriteApp.xcodeproj/project.pbxproj`.
+- Clipboard History uses one bounded black-glass card with a local item count, quiet row dividers, explicit Copy and Use actions, and a confirmation before Clear. Use returns text to the Rewrite composer without sending it to a provider. The redundant Settings clear button was removed; the Settings capture toggle remains.
+- Verified with `./script/build_and_run.sh --verify`. The menu-bar panel itself still needs direct visual verification through the actual status-item interaction; the accessibility inspector exposes the retained main window but not this detached surface.
+- Next: replace the scrolling action rail with four direct actions and a compact overflow menu, then mirror that behavior in the main window. No files are reserved for Claude. Owner remains CODEX.
